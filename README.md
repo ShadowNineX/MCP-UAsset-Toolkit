@@ -1,5 +1,8 @@
 # MCP UAsset Toolkit
 
+[![Build](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/build.yml/badge.svg)](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/build.yml)
+[![Release](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/release.yml/badge.svg)](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/release.yml)
+
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that exposes Unreal Engine .uasset file operations via the [UAssetAPI](https://github.com/atenfyr/UAssetAPI) library. This tool enables AI assistants and other MCP clients to read, analyze, and modify Unreal Engine asset files programmatically.
 
 ## Features
@@ -27,15 +30,22 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that e
 - .NET 10.0 SDK or later
 - Windows x64 (currently configured for win-x64)
 
+### Download Pre-built Binaries
+
+Download the latest release from the [Releases page](https://github.com/hedgehogform/MCP-UAsset-Toolkit/releases).
+
 ### Build from Source
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+# Clone the repository with submodules
+git clone --recurse-submodules https://github.com/hedgehogform/MCP-UAsset-Toolkit.git
 cd "MCP UAsset Toolkit"
 
-# Build the project
+# Build the project (Debug)
 dotnet build
+
+# Build Release
+dotnet build --configuration Release
 
 # Run the MCP server
 dotnet run
@@ -181,7 +191,24 @@ The MCP server uses **SSE (Server-Sent Events)** transport at the `/sse` endpoin
 
 ⚠️ **Version Compatibility** - Ensure you set the correct engine version before working with assets
 
-⚠️ **Save Required** - Edit operations modify assets in memory. You must call `save_asset` to persist changes
+# Build Debug configuration
+dotnet build
+
+# Build Release configuration
+dotnet build --configuration Release
+```
+
+### CI/CD
+
+This project uses GitHub Actions for automated builds and releases:
+
+- **Build Workflow** - Automatically builds Debug and Release configurations on every push/PR to main
+- **Release Workflow** - Creates GitHub releases when version tags are pushed (e.g., `v1.0.0`)
+
+To create a new release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0quired** - Edit operations modify assets in memory. You must call `save_asset` to persist changes
 
 ## Development
 
