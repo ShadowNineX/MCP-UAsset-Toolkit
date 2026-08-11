@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text.Json;
 using MCP_UAsset_Toolkit.Source.Services;
 using MCP_UAsset_Toolkit.Source.Tools.Common;
 using ModelContextProtocol.Server;
@@ -20,43 +19,23 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
-                if (!File.Exists(filePath))
+                return ToolHelpers.FormatSuccess(new
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    filePath,
+                    filePath = session.FilePath,
+                    engineVersion = session.EngineVersion.ToString(),
                     objectVersion = asset.ObjectVersion.ToString(),
                     packageFlags = asset.PackageFlags.ToString(),
                     exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count
+                    importCount = asset.Imports.Count,
+                    isDirty = session.IsDirty
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -70,45 +49,24 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
-                if (!File.Exists(filePath))
+                return ToolHelpers.FormatSuccess(new
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
                     legacyFileVersion = asset.LegacyFileVersion,
                     isUnversioned = asset.IsUnversioned,
                     fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
                     packageGuid = asset.PackageGuid.ToString(),
                     packageFlags = asset.PackageFlags.ToString(),
                     packageSource = asset.PackageSource,
-                    folderName = asset.FolderName?.ToString() ?? "None"
+                    folderName = asset.FolderName?.ToString() ?? "None",
+                    isDirty = session.IsDirty
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -122,25 +80,9 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
                 var exports = asset.Exports.Select((export, index) => new
                 {
                     index = index + 1,
@@ -152,6 +94,7 @@ public static class AssetDataTools
                         : "Class",
                     superIndex = export.SuperIndex.Index,
                     templateIndex = export.TemplateIndex.Index,
+                    exportType = export.GetType().Name,
                     objectFlags = export.ObjectFlags.ToString(),
                     serialSize = export.SerialSize,
                     serialOffset = export.SerialOffset,
@@ -170,20 +113,15 @@ public static class AssetDataTools
                     createBeforeCreateDependencies = export.CreateBeforeCreateDependencies.Count
                 }).ToList();
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
                     count = exports.Count,
                     exports
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -197,25 +135,9 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
                 var imports = asset.Imports.Select((import, index) => new
                 {
                     index = index + 1,
@@ -227,20 +149,15 @@ public static class AssetDataTools
                     import.bImportOptional
                 }).ToList();
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
                     count = imports.Count,
                     imports
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -254,33 +171,15 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
                 if (asset.CustomVersionContainer == null || asset.CustomVersionContainer.Count == 0)
                 {
-                    return JsonSerializer.Serialize(new
+                    return ToolHelpers.FormatSuccess(new
                     {
-                        success = true,
                         count = 0,
-                        customVersions = new List<object>()
+                        customVersions = Array.Empty<object>()
                     });
                 }
 
@@ -292,20 +191,15 @@ public static class AssetDataTools
                     name = cv.Name?.ToString()
                 }).ToList();
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
                     count = customVersions.Count,
                     customVersions
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -319,25 +213,8 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
                 var nameMap = asset.GetNameMapIndexList();
 
                 var nameEntries = nameMap.Select((name, index) => new
@@ -347,20 +224,15 @@ public static class AssetDataTools
                     encoding = name?.Encoding?.WebName ?? "unknown"
                 }).ToList();
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
                     count = nameEntries.Count,
                     names = nameEntries
                 });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -376,33 +248,12 @@ public static class AssetDataTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
                 if (exportIndex < 1 || exportIndex > asset.Exports.Count)
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = $"Export index {exportIndex} out of range (1-{asset.Exports.Count})"
-                    });
+                    return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
                 }
 
                 var export = asset.Exports[exportIndex - 1];
@@ -425,91 +276,118 @@ public static class AssetDataTools
                         {
                             name = prop.Name.ToString(),
                             propertyType = prop.PropertyType.ToString(),
-                            value = prop.ToString()
+                            value = ToolHelpers.ConvertPropertyToValue(prop)
                         }).ToList()
                         : null
                 };
 
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    data = exportData
-                }, new JsonSerializerOptions { WriteIndented = true });
+                return ToolHelpers.FormatSuccess(exportData);
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
 
-    [McpServerTool, Description("Get custom version container information from a .uasset file")]
-    public static Task<string> GetCustomVersionsAsync(
+    [McpServerTool, Description("Search the name map for entries containing a substring")]
+    public static Task<string> SearchNameMapAsync(
         [Description("Full path to the .uasset file")]
-        string filePath)
+        string filePath,
+        [Description("Search query string")]
+        string query)
     {
         return Task.Run(() =>
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var nameMap = session.Asset.GetNameMapIndexList();
 
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
-
-                if (asset.CustomVersionContainer == null || asset.CustomVersionContainer.Count == 0)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = true,
-                        message = "No custom versions found",
-                        count = 0,
-                        customVersions = Array.Empty<object>()
-                    });
-                }
-
-                var customVersions = asset.CustomVersionContainer
-                    .Select(cv => new
-                    {
-                        friendlyName = cv.FriendlyName,
-                        key = cv.Key.ToString(),
-                        version = cv.Version
-                    })
+                var matches = nameMap
+                    .Select((name, index) => new { index, value = name?.Value ?? string.Empty })
+                    .Where(x => x.value.Contains(query, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    count = customVersions.Count,
-                    customVersions
-                }, new JsonSerializerOptions { WriteIndented = true });
+                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Search imports by object name, class name, or class package")]
+    public static Task<string> SearchImportsAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath,
+        [Description("Search query string")]
+        string query)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
+
+                var matches = asset.Imports
+                    .Select((imp, index) => new
+                    {
+                        index = index + 1,
+                        objectName = imp.ObjectName.ToString(),
+                        className = imp.ClassName.ToString(),
+                        classPackage = imp.ClassPackage.ToString(),
+                        outerIndex = imp.OuterIndex.Index
+                    })
+                    .Where(x => x.objectName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                x.className.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                x.classPackage.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Search exports by object name or class name")]
+    public static Task<string> SearchExportsAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath,
+        [Description("Search query string")]
+        string query)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
+
+                var matches = asset.Exports
+                    .Select((exp, index) => new
+                    {
+                        index = index + 1,
+                        objectName = exp.ObjectName.ToString(),
+                        className = exp.ClassIndex.IsImport()
+                            ? exp.ClassIndex.ToImport(asset).ObjectName.ToString()
+                            : "Class",
+                        exportType = exp.GetType().Name
+                    })
+                    .Where(x => x.objectName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                                x.className.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }

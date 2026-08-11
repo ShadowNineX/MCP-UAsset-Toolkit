@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 using ModelContextProtocol.AspNetCore;
 
@@ -10,8 +11,9 @@ public static class Program
     public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
-        // Server URL configuration is in appsettings.json (Kestrel:Endpoints:Http:Url)
-        // Can be overridden by environment variable ASPNETCORE_URLS or command line argument --urls
+
+        // Clear default console logging providers so "info: Microsoft.Hosting.Lifetime" is not written to stdout
+        builder.Logging.ClearProviders();
 
         builder.Services
             .AddMcpServer()

@@ -3,15 +3,16 @@ using System.Text.Json;
 using MCP_UAsset_Toolkit.Source.Services;
 using MCP_UAsset_Toolkit.Source.Tools.Common;
 using ModelContextProtocol.Server;
+using UAssetAPI.UnrealTypes;
 
 namespace MCP_UAsset_Toolkit.Source.Tools;
 
 [McpServerToolType]
 public static class VersionTools
 {
-    [McpServerTool, Description("Set the Unreal Engine version for asset parsing")]
+    [McpServerTool, Description("Set the default Unreal Engine version for asset parsing")]
     public static Task<string> SetEngineVersionAsync(
-        [Description("Engine version (e.g., '4.0', '4.10', '4.27', '5.0', '5.1', '5.5', '5.7')")]
+        [Description("Engine version (e.g., '4.27', '5.0', '5.1', '5.5', '5.7', '5.0EA')")]
         string version)
     {
         return Task.Run(() =>
@@ -21,21 +22,38 @@ public static class VersionTools
                 var engineVersion = ToolHelpers.ParseEngineVersion(version);
                 EngineVersionService.SetVersion(engineVersion, version);
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
-                    message = $"Engine version set to {version}",
-                    version
-                });
+                    version,
+                    engineVersion = engineVersion.ToString()
+                }, $"Engine version set to {version}");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError($"Failed to set engine version: {ex.Message}", ex);
             }
+        });
+    }
+
+    [McpServerTool, Description("Get list of all supported Unreal Engine versions")]
+    public static Task<string> GetSupportedEngineVersionsAsync()
+    {
+        return Task.Run(() =>
+        {
+            var versions = Enum.GetNames<EngineVersion>()
+                .Where(v => v.StartsWith("VER_UE"))
+                .Select(v => new
+                {
+                    enumName = v,
+                    displayVersion = v.Replace("VER_UE", "").Replace("_", ".").Replace(".0EA", " 5.0 EA")
+                })
+                .ToList();
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                count = versions.Count,
+                versions
+            });
         });
     }
 

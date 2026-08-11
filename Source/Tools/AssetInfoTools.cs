@@ -1,10 +1,7 @@
 using System.ComponentModel;
-using System.Text.Json;
-using MCP_UAsset_Toolkit.Source.Models;
 using MCP_UAsset_Toolkit.Source.Services;
 using MCP_UAsset_Toolkit.Source.Tools.Common;
 using ModelContextProtocol.Server;
-using UAssetAPI;
 
 namespace MCP_UAsset_Toolkit.Source.Tools;
 
@@ -14,56 +11,37 @@ public static class AssetInfoTools
     [McpServerTool, Description("Get basic information about a .uasset file")]
     public static Task<string> GetAssetInfoAsync(
         [Description("Full path to the .uasset file")]
-        string filePath)
+        string filePath,
+        [Description("Optional engine version override (e.g. '4.27', '5.5')")]
+        string? engineVersion = null)
     {
         return Task.Run(() =>
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
+                var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
+                var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
+                var asset = session.Asset;
 
-                if (!File.Exists(filePath))
+                var info = new
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
-
-                var info = new AssetInfo
-                {
-                    FileName = Path.GetFileName(filePath),
-                    FileSize = new FileInfo(filePath).Length,
-                    EngineVersion = asset.ObjectVersion.ToString(),
-                    PackageFlags = asset.PackageFlags.ToString(),
-                    ExportCount = asset.Exports.Count,
-                    ImportCount = asset.Imports.Count,
-                    PackageGuid = asset.PackageGuid.ToString()
+                    fileName = Path.GetFileName(filePath),
+                    filePath = session.FilePath,
+                    fileSize = new FileInfo(session.FilePath).Length,
+                    engineVersion = session.EngineVersion.ToString(),
+                    objectVersion = asset.ObjectVersion.ToString(),
+                    packageFlags = asset.PackageFlags.ToString(),
+                    exportCount = asset.Exports.Count,
+                    importCount = asset.Imports.Count,
+                    packageGuid = asset.PackageGuid.ToString(),
+                    isDirty = session.IsDirty
                 };
 
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    data = info
-                });
+                return ToolHelpers.FormatSuccess(info);
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
@@ -71,46 +49,34 @@ public static class AssetInfoTools
     [McpServerTool, Description("Get comprehensive metadata about a .uasset file (similar to UAssetGUI Info tab)")]
     public static Task<string> GetFullAssetInfoAsync(
         [Description("Full path to the .uasset file")]
-        string filePath)
+        string filePath,
+        [Description("Optional engine version override")]
+        string? engineVersion = null)
     {
         return Task.Run(() =>
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
+                var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
+                var asset = session.Asset;
 
                 var info = new
                 {
                     fileName = Path.GetFileName(filePath),
-                    filePath,
-                    fileSize = new FileInfo(filePath).Length,
+                    filePath = session.FilePath,
+                    fileSize = new FileInfo(session.FilePath).Length,
+                    isDirty = session.IsDirty,
 
-                    // Version info
+                    // Versions
+                    engineVersion = session.EngineVersion.ToString(),
                     legacyFileVersion = asset.LegacyFileVersion,
                     isUnversioned = asset.IsUnversioned,
                     fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
                     objectVersion = asset.ObjectVersion.ToString(),
                     objectVersionUE5 = asset.ObjectVersionUE5.ToString(),
 
-                    // Package info
+                    // Package Header Info
                     packageFlags = asset.PackageFlags.ToString(),
                     packageGuid = asset.PackageGuid.ToString(),
                     packageSource = asset.PackageSource,
@@ -118,35 +84,135 @@ public static class AssetInfoTools
                     recordedEngineVersion = $"{asset.RecordedEngineVersion.Major}.{asset.RecordedEngineVersion.Minor}.{asset.RecordedEngineVersion.Patch} (CL {asset.RecordedEngineVersion.Changelist})",
                     recordedCompatibleWithEngineVersion = $"{asset.RecordedCompatibleWithEngineVersion.Major}.{asset.RecordedCompatibleWithEngineVersion.Minor}.{asset.RecordedCompatibleWithEngineVersion.Patch} (CL {asset.RecordedCompatibleWithEngineVersion.Changelist})",
 
-                    // Counts
+                    // Tables and Counts
                     exportCount = asset.Exports.Count,
                     importCount = asset.Imports.Count,
                     nameCount = asset.GetNameMapIndexList().Count,
-
-                    // Additional metadata
-                    chunkIDs = asset.ChunkIDs,
                     softObjectPathListCount = asset.SoftObjectPathList?.Count ?? 0,
                     gatherableTextDataCount = asset.GatherableTextData?.Count ?? 0,
-                    assetRegistryDataSize = asset.AssetRegistryData?.Length ?? 0,
+                    assetRegistryRecordCount = asset.AssetRegistryRecords?.Count ?? 0,
                     hasWorldTileInfo = asset.WorldTileInfo != null,
-
-                    // Custom versions
-                    customVersionCount = asset.CustomVersionContainer?.Count ?? 0
+                    customVersionCount = asset.CustomVersionContainer?.Count ?? 0,
+                    chunkIDs = asset.ChunkIDs
                 };
 
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    data = info
-                }, new JsonSerializerOptions { WriteIndented = true });
+                return ToolHelpers.FormatSuccess(info);
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Get list of soft object paths stored in the asset header")]
+    public static Task<string> GetSoftObjectPathsAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var paths = session.Asset.SoftObjectPathList?.Select((sop, idx) => new
                 {
-                    success = false,
-                    error = ex.Message
+                    index = idx,
+                    packageName = sop.AssetPath.PackageName?.ToString(),
+                    assetName = sop.AssetPath.AssetName?.ToString(),
+                    subPathString = sop.SubPathString?.ToString()
+                }).ToList() ?? [];
+
+                return ToolHelpers.FormatSuccess(new { count = paths.Count, paths });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Get gatherable text localization data stored in the asset")]
+    public static Task<string> GetGatherableTextDataAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var textData = session.Asset.GatherableTextData?.Select((td, idx) => new
+                {
+                    index = idx,
+                    namespaceName = td.NamespaceName?.ToString(),
+                    sourceData = td.SourceData.SourceString?.ToString()
+                }).ToList() ?? [];
+
+                return ToolHelpers.FormatSuccess(new { count = textData.Count, textData });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Get asset registry records and searchable tags embedded in the asset")]
+    public static Task<string> GetAssetRegistryRecordsAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var records = session.Asset.AssetRegistryRecords?.Select((rec, idx) => new
+                {
+                    index = idx,
+                    objectPath = rec.Path,
+                    objectClassName = rec.ClassName,
+                    tags = rec.TagMap
+                }).ToList() ?? [];
+
+                return ToolHelpers.FormatSuccess(new { count = records.Count, records });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Get World composition tile info if present in the asset")]
+    public static Task<string> GetWorldTileInfoAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var tileInfo = session.Asset.WorldTileInfo;
+
+                if (tileInfo == null)
+                {
+                    return ToolHelpers.FormatSuccess(null, "No WorldTileInfo present in asset");
+                }
+
+                return ToolHelpers.FormatSuccess(new
+                {
+                    position = tileInfo.Position,
+                    bounds = tileInfo.Bounds,
+                    layer = tileInfo.Layer,
+                    lodListCount = tileInfo.LODList?.Length ?? 0
                 });
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }

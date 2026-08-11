@@ -1,9 +1,7 @@
 using System.ComponentModel;
-using System.Text.Json;
 using MCP_UAsset_Toolkit.Source.Services;
 using MCP_UAsset_Toolkit.Source.Tools.Common;
 using ModelContextProtocol.Server;
-using UAssetAPI;
 using UAssetAPI.UnrealTypes;
 
 namespace MCP_UAsset_Toolkit.Source.Tools;
@@ -11,9 +9,9 @@ namespace MCP_UAsset_Toolkit.Source.Tools;
 [McpServerToolType]
 public static class AssetEditTools
 {
-    [McpServerTool, Description("Save a modified .uasset file")]
+    [McpServerTool, Description("Save a modified .uasset file in active session to disk")]
     public static Task<string> SaveAssetAsync(
-        [Description("Full path to the .uasset file to save")]
+        [Description("Full path to the .uasset file in session")]
         string filePath,
         [Description("Optional output path (defaults to overwrite original)")]
         string? outputPath = null)
@@ -22,56 +20,21 @@ public static class AssetEditTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
+                var result = AssetSessionService.SaveSession(filePath, outputPath);
+                return ToolHelpers.FormatSuccess(new
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
-                var savePath = outputPath ?? filePath;
-
-                // Create directory if it doesn't exist
-                var directory = Path.GetDirectoryName(savePath);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                asset.Write(savePath);
-
-                return JsonSerializer.Serialize(new
-                {
-                    success = true,
-                    message = $"Asset saved successfully",
-                    savedPath = savePath,
-                    fileSize = new FileInfo(savePath).Length
-                });
+                    savedPath = result.savedPath,
+                    fileSize = result.fileSize
+                }, "Asset saved successfully");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
 
-    [McpServerTool, Description("Edit a name map entry at a specific index")]
+    [McpServerTool, Description("Edit a name map entry at a specific index in memory")]
     public static Task<string> EditNameMapEntryAsync(
         [Description("Full path to the .uasset file")]
         string filePath,
@@ -84,60 +47,34 @@ public static class AssetEditTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
                 var nameMap = asset.GetNameMapIndexList();
 
                 if (index < 0 || index >= nameMap.Count)
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = $"Index {index} is out of range (0-{nameMap.Count - 1})"
-                    });
+                    return ToolHelpers.FormatError($"Index {index} is out of range (0-{nameMap.Count - 1})");
                 }
 
                 var oldName = nameMap[index]?.Value ?? "null";
                 asset.SetNameReference(index, FString.FromString(newName));
+                AssetSessionService.MarkDirty(filePath);
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
-                    message = $"Name map entry {index} updated",
+                    index,
                     oldValue = oldName,
-                    newValue = newName,
-                    note = "Remember to call save_asset to persist changes"
-                });
+                    newValue = newName
+                }, $"Name map entry {index} updated. Call save_asset to persist to disk.");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
 
-    [McpServerTool, Description("Add a new entry to the name map")]
+    [McpServerTool, Description("Add a new entry to the name map in memory")]
     public static Task<string> AddNameMapEntryAsync(
         [Description("Full path to the .uasset file")]
         string filePath,
@@ -148,48 +85,25 @@ public static class AssetEditTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
                 var newIndex = asset.AddNameReference(FString.FromString(name));
+                AssetSessionService.MarkDirty(filePath);
 
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
-                    message = $"Added name to map at index {newIndex}",
                     index = newIndex,
-                    value = name,
-                    note = "Remember to call save_asset to persist changes"
-                });
+                    value = name
+                }, $"Added name to map at index {newIndex}. Call save_asset to persist to disk.");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
 
-    [McpServerTool, Description("Edit import data fields")]
+    [McpServerTool, Description("Edit import data fields in memory")]
     public static Task<string> EditImportAsync(
         [Description("Full path to the .uasset file")]
         string filePath,
@@ -208,33 +122,12 @@ public static class AssetEditTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
                 if (importIndex < 1 || importIndex > asset.Imports.Count)
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = $"Import index {importIndex} is out of range (1-{asset.Imports.Count})"
-                    });
+                    return ToolHelpers.FormatError($"Import index {importIndex} is out of range (1-{asset.Imports.Count})");
                 }
 
                 var import = asset.Imports[importIndex - 1];
@@ -264,26 +157,53 @@ public static class AssetEditTools
                     changes.Add($"OuterIndex: {outerIndex.Value}");
                 }
 
-                return JsonSerializer.Serialize(new
+                AssetSessionService.MarkDirty(filePath);
+
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
-                    message = $"Import {importIndex} updated",
-                    changes,
-                    note = "Remember to call save_asset to persist changes"
-                });
+                    importIndex,
+                    changes
+                }, $"Import {importIndex} updated. Call save_asset to persist to disk.");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
-                {
-                    success = false,
-                    error = ex.Message
-                });
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }
 
-    [McpServerTool, Description("Edit export information fields")]
+    [McpServerTool, Description("Remove an import by index (1-based)")]
+    public static Task<string> RemoveImportAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath,
+        [Description("Import index (1-based)")]
+        int importIndex)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
+
+                if (importIndex < 1 || importIndex > asset.Imports.Count)
+                {
+                    return ToolHelpers.FormatError($"Import index {importIndex} is out of range (1-{asset.Imports.Count})");
+                }
+
+                asset.Imports.RemoveAt(importIndex - 1);
+                AssetSessionService.MarkDirty(filePath);
+
+                return ToolHelpers.FormatSuccess(new { importIndex, remainingCount = asset.Imports.Count }, $"Import {importIndex} removed");
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Edit export information fields in memory")]
     public static Task<string> EditExportInfoAsync(
         [Description("Full path to the .uasset file")]
         string filePath,
@@ -312,33 +232,12 @@ public static class AssetEditTools
         {
             try
             {
-                if (!EngineVersionService.IsVersionSet)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.VersionNotSetError
-                    });
-                }
-
-                if (!File.Exists(filePath))
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = ToolHelpers.FileNotFoundError
-                    });
-                }
-
-                var asset = new UAsset(filePath, EngineVersionService.GetVersionOrThrow());
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
 
                 if (exportIndex < 1 || exportIndex > asset.Exports.Count)
                 {
-                    return JsonSerializer.Serialize(new
-                    {
-                        success = false,
-                        error = $"Export index {exportIndex} is out of range (1-{asset.Exports.Count})"
-                    });
+                    return ToolHelpers.FormatError($"Export index {exportIndex} is out of range (1-{asset.Exports.Count})");
                 }
 
                 var export = asset.Exports[exportIndex - 1];
@@ -398,21 +297,48 @@ public static class AssetEditTools
                     changes.Add($"bIsAsset: {bIsAsset.Value}");
                 }
 
-                return JsonSerializer.Serialize(new
+                AssetSessionService.MarkDirty(filePath);
+
+                return ToolHelpers.FormatSuccess(new
                 {
-                    success = true,
-                    message = $"Export {exportIndex} information updated",
-                    changes,
-                    note = "Remember to call save_asset to persist changes"
-                });
+                    exportIndex,
+                    changes
+                }, $"Export {exportIndex} updated. Call save_asset to persist to disk.");
             }
             catch (Exception ex)
             {
-                return JsonSerializer.Serialize(new
+                return ToolHelpers.FormatError(ex.Message, ex);
+            }
+        });
+    }
+
+    [McpServerTool, Description("Remove an export by index (1-based)")]
+    public static Task<string> RemoveExportAsync(
+        [Description("Full path to the .uasset file")]
+        string filePath,
+        [Description("Export index (1-based)")]
+        int exportIndex)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                var session = AssetSessionService.GetOrLoadSession(filePath);
+                var asset = session.Asset;
+
+                if (exportIndex < 1 || exportIndex > asset.Exports.Count)
                 {
-                    success = false,
-                    error = ex.Message
-                });
+                    return ToolHelpers.FormatError($"Export index {exportIndex} is out of range (1-{asset.Exports.Count})");
+                }
+
+                asset.Exports.RemoveAt(exportIndex - 1);
+                AssetSessionService.MarkDirty(filePath);
+
+                return ToolHelpers.FormatSuccess(new { exportIndex, remainingCount = asset.Exports.Count }, $"Export {exportIndex} removed");
+            }
+            catch (Exception ex)
+            {
+                return ToolHelpers.FormatError(ex.Message, ex);
             }
         });
     }

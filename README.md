@@ -3,36 +3,40 @@
 [![Build](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/build.yml/badge.svg)](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/build.yml)
 [![Release](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/release.yml/badge.svg)](https://github.com/hedgehogform/MCP-UAsset-Toolkit/actions/workflows/release.yml)
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that exposes Unreal Engine .uasset file operations via the [UAssetAPI](https://github.com/atenfyr/UAssetAPI) library. This tool enables AI assistants and other MCP clients to read, analyze, and modify Unreal Engine asset files programmatically.
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server that exposes Unreal Engine `.uasset` file operations via the [UAssetAPI](https://github.com/atenfyr/UAssetAPI) library. This tool enables AI assistants and other MCP clients to read, analyze, search, edit, and convert Unreal Engine asset files programmatically.
 
-## Features
+## Key Features
 
-### Asset Information
-- **Read Asset Structure** - Parse .uasset files and access metadata
-- **General Information** - View package details, flags, GUIDs, folder names
-- **Name Map** - List and edit the string table used by the asset
-- **Custom Versions** - View all custom version information
+### In-Memory Asset Session Management
+- **Persistent Multi-Step Edits**: Keeps loaded assets in memory (`AssetSessionService`) so edits accumulate across multiple tool calls before `save_asset` is invoked.
+- **Session Tracking**: List active sessions, check dirty flags, and unload sessions cleanly.
 
-### Import/Export Management
-- **List Imports** - View all external dependencies with full details (class package, class name, outer index, etc.)
-- **List Exports** - View all objects contained in the asset with comprehensive metadata
-- **Export Data** - Access detailed property data for specific exports
+### Comprehensive Asset Information & Inspection
+- **Read & Full Info**: Package flags, object versions (UE4 & UE5), licensee version, recorded engine version, folder names, GUIDs.
+- **Header Metadata**: Soft object paths, gatherable localization text, embedded asset registry records & tags, world composition tile info.
+- **Tables & Lists**: Exports, imports, string table (name map), custom version container.
+- **Search Capabilities**: Substring/regex searching across name map, imports, and exports.
 
-### Editing Capabilities
-- **Name Map Editing** - Add or modify entries in the name table
-- **Import Editing** - Update import references (object names, class packages, class names, outer indices)
-- **Export Editing** - Modify export information (object names, indices, flags)
-- **Save Changes** - Write modified assets back to disk
+### Property & Export Editing
+- **Export Property Manipulation**: Read, set, update, or remove property values (`Int`, `Float`, `Double`, `Bool`, `Str`, `Utf8Str`, `Name`, `Text`, `Byte`, `Enum`, `Object`, etc.) on exports.
+- **Structural Editing**: Add new exports (`NormalExport`, `RawExport`, `ClassExport`), duplicate/clone exports, remove exports.
+- **Import Editing**: Add, edit, or remove import references.
+- **Name Map Editing**: Add, edit, search, or remove string table entries.
 
-## Installation
+### Full JSON Serialization & Roundtripping
+- **Export to JSON**: Serialize entire assets to UAssetAPI JSON format strings or `.json` files.
+- **Import from JSON**: Compile `.json` files or raw JSON strings back into valid binary `.uasset` files.
+
+### Unversioned Property Mappings (.usmap & .jmap)
+- **Mapping Support**: Load `.usmap`, `.jmap`, and `.jmap.gz` schema mappings for cooked unversioned assets.
+
+---
+
+## Installation & Build
 
 ### Prerequisites
-- .NET 10.0 SDK or later
-- Windows x64 (currently configured for win-x64)
-
-### Download Pre-built Binaries
-
-Download the latest release from the [Releases page](https://github.com/hedgehogform/MCP-UAsset-Toolkit/releases).
+- **.NET 10.0 SDK** or later
+- **Windows x64**
 
 ### Build from Source
 
@@ -41,211 +45,107 @@ Download the latest release from the [Releases page](https://github.com/hedgehog
 git clone --recurse-submodules https://github.com/hedgehogform/MCP-UAsset-Toolkit.git
 cd "MCP UAsset Toolkit"
 
-# Build the project (Debug)
+# Build Debug
 dotnet build
 
 # Build Release
 dotnet build --configuration Release
 
-# Run the MCP server
+# Run tests
+dotnet test UAssetAPI/UAssetAPI.Tests/UAssetAPI.Tests.csproj
+
+# Run MCP Server
 dotnet run
 ```
 
-### Publish Standalone Executable
+---
 
-```bash
-dotnet publish -c Release -r win-x64 --self-contained
-```
+## Complete MCP Tools Reference
 
-The executable will be located in `bin/Release/net10.0/win-x64/publish/`
+### Version & Mapping Tools
+- `set_engine_version` - Set default Unreal Engine version (e.g. `'4.27'`, `'5.0'`, `'5.5'`, `'5.7'`, `'5.0EA'`)
+- `get_supported_engine_versions` - List all supported Unreal Engine version strings
+- `load_mappings` - Load a `.usmap` or `.jmap` unversioned property mapping file
+- `get_mappings_info` - Inspect loaded property mapping schemas
 
-## Configuration
+### Session Tools
+- `list_active_sessions` - View all active in-memory asset sessions and dirty states
+- `close_session` - Unload a specific asset session from memory
+- `clear_all_sessions` - Clear all loaded sessions
 
-### Server URL
+### Inspection Tools
+- `read_asset` - Parse basic structure of a `.uasset` file
+- `get_general_info` - View package flags, folder name, and package GUID
+- `get_full_asset_info` - Comprehensive metadata (similar to UAssetGUI Info tab)
+- `list_exports` - List all exports with index, class, flags, serial size/offset
+- `list_imports` - List all external dependency imports
+- `get_name_map` - List string table entries with encodings
+- `list_custom_versions` - List custom versions (GUID, friendly name, version)
+- `get_soft_object_paths` - View soft object paths stored in asset header
+- `get_gatherable_text_data` - View gatherable localization text data
+- `get_asset_registry_records` - View asset registry records and searchable tags
+- `get_world_tile_info` - View world composition tile bounds and settings
+- `get_export_data` - Detailed export properties and summary
+- `search_name_map` - Search name map entries matching a query string
+- `search_imports` - Search imports by object name, class name, or package
+- `search_exports` - Search exports by object name or class name
 
-The default server URL is configured in `appsettings.json`:
+### Property Tools
+- `get_export_properties` - Get export properties as structured JSON
+- `set_export_property` - Set, add, or update property value on an export
+- `remove_export_property` - Remove a property from an export
 
-```json
-{
-  "Kestrel": {
-    "Endpoints": {
-      "Http": {
-        "Url": "http://127.0.0.1:13338"
-      }
-    }
-  }
-}
-```
-
-You can override this via:
-- **Environment variable**: `ASPNETCORE_URLS=http://localhost:5000`
-- **Command line**: `dotnet run --urls "http://localhost:5000"`
-
-### MCP Client Configuration
-
-Add to your MCP client configuration (e.g., Claude Desktop):
-
-```json
-{
-  "mcpServers": {
-    "uasset-toolkit": {
-      "command": "dotnet",
-      "args": ["run", "--project", "path/to/MCP UAsset Toolkit"],
-      "env": {}
-    }
-  }
-}
-```
-
-## Usage
-
-### 1. Set Engine Version
-
-Before working with any assets, set the Unreal Engine version:
-
-```
-set_engine_version("4.27")
-```
-
-Supported formats: `"4.27"`, `"5.3"`, `"5.5"`, etc.
-
-### 2. Read Asset Information
-
-```
-read_asset("path/to/asset.uasset")
-list_exports("path/to/asset.uasset")
-list_imports("path/to/asset.uasset")
-get_name_map("path/to/asset.uasset")
-```
-
-### 3. Edit Asset
-
-```
-# Edit a name in the name map
-edit_name_map_entry("path/to/asset.uasset", index: 5, newName: "NewName")
-
-# Edit an import
-edit_import("path/to/asset.uasset", importIndex: 1, objectName: "NewObjectName")
-
-# Edit export information
-edit_export_info("path/to/asset.uasset", exportIndex: 1, bIsAsset: true)
-
-# Save changes
-save_asset("path/to/asset.uasset")
-```
-
-## Available MCP Tools
-
-### Version Management
-- `set_engine_version` - Set the Unreal Engine version for parsing
-
-### Asset Reading
-- `read_asset` - Parse and read basic asset structure
-- `get_general_info` - Get general package information
-- `get_full_asset_info` - Get comprehensive metadata (similar to UAssetGUI Info tab)
-- `list_exports` - List all exports with detailed information
-- `list_imports` - List all imports with detailed information  
-- `get_export_data` - Get detailed data for a specific export
-- `get_name_map` - Get the name map (string table)
-- `list_custom_versions` - List all custom versions
-
-### Asset Editing
-- `edit_name_map_entry` - Edit an entry in the name map
-- `add_name_map_entry` - Add a new name to the name map
+### Editing & Structure Tools
+- `add_name_map_entry` - Add string to name map
+- `edit_name_map_entry` - Modify name map entry at index
+- `add_import` - Add a new external import reference
 - `edit_import` - Edit import fields
-- `edit_export_info` - Edit export information fields
-- `save_asset` - Save modified asset to disk
+- `remove_import` - Remove import at index
+- `add_export` - Add a new export (`NormalExport`, `RawExport`, `ClassExport`)
+- `edit_export_info` - Modify export header info and flags
+- `copy_export` - Clone/duplicate an export
+- `remove_export` - Remove export at index
+- `add_soft_object_path` - Add a soft object path to asset header
+- `remove_soft_object_path` - Remove soft object path by index
+- `add_custom_version` - Add custom version GUID & number
+- `remove_custom_version` - Remove custom version by GUID
+- `set_asset_registry_tag` - Add or update asset registry searchable tag
+- `save_asset` - Save in-memory modified asset back to disk
+
+### JSON Roundtripping Tools
+- `export_asset_to_json` - Export asset to JSON string
+- `export_to_json_file` - Export asset to a `.json` file
+- `import_asset_from_json` - Import asset from JSON string
+- `import_from_json_file` - Compile `.json` file back into `.uasset` file
+
+---
 
 ## Architecture
 
 ```
 MCP UAsset Toolkit/
 ├── Source/
-│   ├── Program.cs              # ASP.NET Core host and MCP server setup
-│   ├── Models/                 # Data transfer objects
-│   ├── Services/               # Global state management (EngineVersionService)
-│   └── Tools/                  # MCP tool implementations
-│       ├── VersionTools.cs     # Engine version management
-│       ├── AssetInfoTools.cs   # Asset information retrieval
-│       ├── AssetDataTools.cs   # Import/export/name map listing
-│       └── AssetEditTools.cs   # Asset editing operations
-├── UAssetAPI/                  # Submodule - Unreal asset parsing library
-└── appsettings.json            # Server configuration
+│   ├── Program.cs                  # ASP.NET Core host & MCP server setup
+│   ├── Models/                     # Data transfer models
+│   ├── Services/                   # Core application services
+│   │   ├── EngineVersionService.cs # Default engine version management
+│   │   ├── AssetSessionService.cs  # In-memory asset session management
+│   │   └── MappingService.cs       # .usmap / .jmap property mapping service
+│   └── Tools/                      # MCP Server Tool Registries
+│       ├── Common/ToolHelpers.cs   # Shared parsing, property, & JSON helpers
+│       ├── VersionTools.cs         # Engine version tools
+│       ├── SessionTools.cs         # Session management tools
+│       ├── AssetInfoTools.cs       # Metadata & header inspection tools
+│       ├── AssetDataTools.cs       # Export/import/name map listing & search
+│       ├── AssetEditTools.cs       # Export/import/name map editing & saving
+│       ├── AssetPropertyTools.cs   # Property read/write/delete tools
+│       ├── AssetStructureTools.cs  # Export/import/tag addition & deletion
+│       ├── AssetJsonTools.cs       # JSON serialization & roundtripping
+│       └── MappingTools.cs         # Mapping loading & inspection tools
+├── UAssetAPI/                      # Submodule - UAssetAPI Library (v1.1.0)
+└── appsettings.json                # ASP.NET Core configuration
 ```
-
-## Transport
-
-The MCP server uses **SSE (Server-Sent Events)** transport at the `/sse` endpoint:
-- Default URL: `http://127.0.0.1:13338/sse`
-- Protocol: [Model Context Protocol](https://modelcontextprotocol.io)
-
-## Dependencies
-
-- **[UAssetAPI](https://github.com/atenfyr/UAssetAPI)** - Core Unreal asset parsing and manipulation
-- **[CUE4Parse](https://github.com/FabianFG/CUE4Parse)** v1.2.2 - Unreal Engine parsing utilities
-- **[ModelContextProtocol.AspNetCore](https://www.nuget.org/packages/ModelContextProtocol.AspNetCore)** v0.8.0-preview.1 - MCP server framework
-
-## Important Notes
-
-⚠️ **Backup Your Assets** - Always back up original .uasset files before editing
-
-⚠️ **Version Compatibility** - Ensure you set the correct engine version before working with assets
-
-# Build Debug configuration
-dotnet build
-
-# Build Release configuration
-dotnet build --configuration Release
-```
-
-### CI/CD
-
-This project uses GitHub Actions for automated builds and releases:
-
-- **Build Workflow** - Automatically builds Debug and Release configurations on every push/PR to main
-- **Release Workflow** - Creates GitHub releases when version tags are pushed (e.g., `v1.0.0`)
-
-To create a new release:
-```bash
-git tag v1.0.0
-git push origin v1.0.0quired** - Edit operations modify assets in memory. You must call `save_asset` to persist changes
-
-## Development
-
-### Building
-
-```bash
-dotnet build
-```
-
-### Running Tests
-
-```bash
-# UAssetAPI has separate test suite
-cd UAssetAPI
-dotnet test UAssetAPI.Tests/UAssetAPI.Tests.csproj
-```
-
-### Code Style
-
-- Methods end with `Async`
-- Tool classes are `public static`
-- All tools return JSON strings with `{ success: bool, ... }` format
-- Validate engine version and file existence in all tools
 
 ## License
 
-This project uses UAssetAPI. See the [UAssetAPI LICENSE](UAssetAPI/LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please ensure:
-1. All MCP tools follow the established patterns
-2. Proper error handling with standard error messages
-3. Engine version validation before asset operations
-4. Build succeeds without errors
-
-## Acknowledgments
-
-- [atenfyr](https://github.com/atenfyr) for [UAssetAPI](https://github.com/atenfyr/UAssetAPI)
-- [Anthropic](https://www.anthropic.com) for the [Model Context Protocol](https://modelcontextprotocol.io)
+This project uses [UAssetAPI](https://github.com/atenfyr/UAssetAPI). See [LICENSE](UAssetAPI/LICENSE) for details.
