@@ -149,3 +149,5 @@ node_modules/
 *.uasset.bak
 *.uexp.bak
 *.ubulk.bak
+# Local build/publish verification output
+artifacts/

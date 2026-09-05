@@ -27,8 +27,11 @@ jobs:
             - name: Build Release
               run: dotnet build --configuration Release --no-restore
 
+            - name: Test Release
+              run: dotnet test --solution "MCP UAsset Toolkit.slnx" --configuration Release --no-build
+
             - name: Publish Self-contained executable
-              run: dotnet publish --configuration Release --runtime win-x64 --self-contained true --output ./publish/Release
+              run: dotnet publish "MCP UAsset Toolkit.csproj" --configuration Release --runtime win-x64 --self-contained true --output ./publish/Release
 
             - name: Create release archive
               run: |

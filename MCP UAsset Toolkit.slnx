@@ -1,3 +1,5 @@
 <Solution>
   <Project Path="MCP UAsset Toolkit.csproj" />
+  <Project Path="UAssetAPI/UAssetAPI/UAssetAPI.csproj" />
+  <Project Path="Tests/MCP.UAssetToolkit.Tests/MCP.UAssetToolkit.Tests.csproj" />
 </Solution>

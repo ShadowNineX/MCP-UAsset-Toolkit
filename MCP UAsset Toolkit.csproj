@@ -9,21 +9,26 @@
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
     <StartupObject>MCP_UAsset_Toolkit.Source.Program</StartupObject>
     <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
+    <SelfContained>false</SelfContained>
+    <PublishSelfContained>true</PublishSelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="UAssetAPI\**" />
+    <Content Remove="UAssetAPI\**" />
     <EmbeddedResource Remove="UAssetAPI\**" />
     <None Remove="UAssetAPI\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CUE4Parse" Version="1.2.2.202608" />
-    <PackageReference Include="ModelContextProtocol" Version="2.1.0" />
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.1.0" />
+    <PackageReference Include="CUE4Parse" Version="1.2.2.202609" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <!-- Override CUE4Parse's vulnerable transitive version (GHSA-73j8-2gch-69rq). -->
+    <PackageReference Include="Microsoft.Bcl.Memory" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>

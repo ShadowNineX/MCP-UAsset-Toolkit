@@ -1,0 +1,6 @@
+<Project>
+  <!-- Keep the upstream submodule pristine while updating its compression dependency. -->
+  <ItemGroup Condition="'$(MSBuildProjectName)' == 'UAssetAPI'">
+    <PackageReference Update="ZstdSharp.Port" Version="0.8.8" />
+  </ItemGroup>
+</Project>

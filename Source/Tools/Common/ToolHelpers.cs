@@ -10,6 +10,23 @@ namespace MCP_UAsset_Toolkit.Source.Tools.Common;
 
 public static class ToolHelpers
 {
+    public static Task<string> ExecuteAsync(Func<string> operation)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                // UAssetAPI and the global mapping/version caches are mutable. Hold
+                // the same gate for the complete MCP operation, including reads.
+                return MCP_UAsset_Toolkit.Source.Services.AssetSessionService.ExecuteOperation(operation);
+            }
+            catch (Exception ex)
+            {
+                return FormatError(ex.Message, ex);
+            }
+        });
+    }
+
     public const string FileNotFoundError = "File not found or invalid path";
     public const string VersionNotSetError = "Engine version not set. Use set_engine_version tool first.";
 
@@ -27,7 +44,7 @@ public static class ToolHelpers
         var normalized = version.Trim();
 
         // Check exact match on enum name
-        if (Enum.TryParse<EngineVersion>(normalized, true, out var exactMatch))
+        if (Enum.TryParse<EngineVersion>(normalized, true, out var exactMatch) && Enum.IsDefined(exactMatch))
         {
             return exactMatch;
         }

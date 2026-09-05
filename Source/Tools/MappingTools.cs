@@ -13,59 +13,43 @@ public static class MappingTools
         [Description("Full path to the .usmap or .jmap file")]
         string mappingsFilePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                MappingService.SetGlobalMappings(mappingsFilePath);
-                var mappings = MappingService.GetGlobalMappings();
+        return ToolHelpers.ExecuteAsync(() => {
+            MappingService.SetGlobalMappings(mappingsFilePath);
+            var mappings = MappingService.GetGlobalMappings();
 
-                return ToolHelpers.FormatSuccess(new
-                {
-                    mappingsFilePath = Path.GetFullPath(mappingsFilePath),
-                    version = mappings?.Version.ToString(),
-                    fileVersionUE4 = mappings?.FileVersionUE4.ToString(),
-                    fileVersionUE5 = mappings?.FileVersionUE5.ToString(),
-                    schemaCount = mappings?.Schemas?.Count ?? 0,
-                    enumCount = mappings?.EnumMap?.Count ?? 0
-                }, "Global property mappings loaded successfully");
-            }
-            catch (Exception ex)
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                mappingsFilePath = Path.GetFullPath(mappingsFilePath),
+                version = mappings?.Version.ToString(),
+                fileVersionUE4 = mappings?.FileVersionUE4.ToString(),
+                fileVersionUE5 = mappings?.FileVersionUE5.ToString(),
+                schemaCount = mappings?.Schemas?.Count ?? 0,
+                enumCount = mappings?.EnumMap?.Count ?? 0
+            }, "Global property mappings loaded successfully");
         });
     }
 
     [McpServerTool, Description("Get information about currently loaded property mappings")]
     public static Task<string> GetMappingsInfoAsync()
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var mappings = MappingService.GetGlobalMappings();
+            if (mappings == null)
             {
-                var mappings = MappingService.GetGlobalMappings();
-                if (mappings == null)
-                {
-                    return ToolHelpers.FormatSuccess(new { isLoaded = false }, "No global property mappings currently loaded");
-                }
+                return ToolHelpers.FormatSuccess(new { isLoaded = false }, "No global property mappings currently loaded");
+            }
 
-                return ToolHelpers.FormatSuccess(new
-                {
-                    isLoaded = true,
-                    filePath = mappings.FilePath,
-                    version = mappings.Version.ToString(),
-                    fileVersionUE4 = mappings.FileVersionUE4.ToString(),
-                    fileVersionUE5 = mappings.FileVersionUE5.ToString(),
-                    schemaCount = mappings.Schemas?.Count ?? 0,
-                    enumCount = mappings.EnumMap?.Count ?? 0,
-                    netCL = mappings.NetCL
-                });
-            }
-            catch (Exception ex)
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                isLoaded = true,
+                filePath = mappings.FilePath,
+                version = mappings.Version.ToString(),
+                fileVersionUE4 = mappings.FileVersionUE4.ToString(),
+                fileVersionUE5 = mappings.FileVersionUE5.ToString(),
+                schemaCount = mappings.Schemas?.Count ?? 0,
+                enumCount = mappings.EnumMap?.Count ?? 0,
+                netCL = mappings.NetCL
+            });
         });
     }
 }

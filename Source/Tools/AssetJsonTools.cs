@@ -16,24 +16,16 @@ public static class AssetJsonTools
         [Description("Whether to format/indent the JSON output (default: true)")]
         bool formatted = true)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var json = session.Asset.SerializeJson(formatted);
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var json = session.Asset.SerializeJson(formatted);
 
-                return ToolHelpers.FormatSuccess(new
-                {
-                    filePath = session.FilePath,
-                    jsonLength = json.Length,
-                    json
-                });
-            }
-            catch (Exception ex)
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                filePath = session.FilePath,
+                jsonLength = json.Length,
+                json
+            });
         });
     }
 
@@ -46,32 +38,24 @@ public static class AssetJsonTools
         [Description("Whether to format/indent the JSON output (default: true)")]
         bool formatted = true)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var json = session.Asset.SerializeJson(formatted);
+
+            var fullOutPath = Path.GetFullPath(jsonOutputPath);
+            var dir = Path.GetDirectoryName(fullOutPath);
+            if (!string.IsNullOrEmpty(dir))
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var json = session.Asset.SerializeJson(formatted);
-
-                var fullOutPath = Path.GetFullPath(jsonOutputPath);
-                var dir = Path.GetDirectoryName(fullOutPath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                File.WriteAllText(fullOutPath, json);
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    jsonOutputPath = fullOutPath,
-                    fileSize = new FileInfo(fullOutPath).Length
-                }, "Exported asset to JSON file successfully");
+                Directory.CreateDirectory(dir);
             }
-            catch (Exception ex)
+
+            File.WriteAllText(fullOutPath, json);
+
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                jsonOutputPath = fullOutPath,
+                fileSize = new FileInfo(fullOutPath).Length
+            }, "Exported asset to JSON file successfully");
         });
     }
 
@@ -84,38 +68,30 @@ public static class AssetJsonTools
         [Description("Whether to immediately write the imported asset to disk (default: true)")]
         bool saveToDisk = true)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var fullPath = Path.GetFullPath(targetFilePath);
-                var asset = UAsset.DeserializeJson(jsonContent);
+        return ToolHelpers.ExecuteAsync(() => {
+            var fullPath = Path.GetFullPath(targetFilePath);
+            var asset = UAsset.DeserializeJson(jsonContent);
 
-                if (saveToDisk)
+            if (saveToDisk)
+            {
+                var dir = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrEmpty(dir))
                 {
-                    var dir = Path.GetDirectoryName(fullPath);
-                    if (!string.IsNullOrEmpty(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-                    asset.Write(fullPath);
+                    Directory.CreateDirectory(dir);
                 }
-
-                // Register session
-                var session = AssetSessionService.RegisterSession(fullPath, asset);
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    targetFilePath = fullPath,
-                    exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count,
-                    savedToDisk = saveToDisk
-                }, "Asset imported from JSON successfully");
+                asset.Write(fullPath);
             }
-            catch (Exception ex)
+
+            // Register session
+            AssetSessionService.RegisterSession(fullPath, asset, isDirty: !saveToDisk);
+
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                targetFilePath = fullPath,
+                exportCount = asset.Exports.Count,
+                importCount = asset.Imports.Count,
+                savedToDisk = saveToDisk
+            }, "Asset imported from JSON successfully");
         });
     }
 
@@ -126,44 +102,36 @@ public static class AssetJsonTools
         [Description("Destination .uasset file path")]
         string targetFilePath)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var jsonFullPath = Path.GetFullPath(jsonInputPath);
+            if (!File.Exists(jsonFullPath))
             {
-                var jsonFullPath = Path.GetFullPath(jsonInputPath);
-                if (!File.Exists(jsonFullPath))
-                {
-                    return ToolHelpers.FormatError($"JSON file not found at '{jsonInputPath}'");
-                }
-
-                var jsonContent = File.ReadAllText(jsonFullPath);
-                var fullPath = Path.GetFullPath(targetFilePath);
-
-                var asset = UAsset.DeserializeJson(jsonContent);
-
-                var dir = Path.GetDirectoryName(fullPath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-
-                asset.Write(fullPath);
-
-                AssetSessionService.RegisterSession(fullPath, asset);
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    jsonInputPath = jsonFullPath,
-                    targetFilePath = fullPath,
-                    fileSize = new FileInfo(fullPath).Length,
-                    exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count
-                }, "Compiled .uasset from JSON file successfully");
+                return ToolHelpers.FormatError($"JSON file not found at '{jsonInputPath}'");
             }
-            catch (Exception ex)
+
+            var jsonContent = File.ReadAllText(jsonFullPath);
+            var fullPath = Path.GetFullPath(targetFilePath);
+
+            var asset = UAsset.DeserializeJson(jsonContent);
+
+            var dir = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(dir))
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
+                Directory.CreateDirectory(dir);
             }
+
+            asset.Write(fullPath);
+
+            AssetSessionService.RegisterSession(fullPath, asset);
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                jsonInputPath = jsonFullPath,
+                targetFilePath = fullPath,
+                fileSize = new FileInfo(fullPath).Length,
+                exportCount = asset.Exports.Count,
+                importCount = asset.Imports.Count
+            }, "Compiled .uasset from JSON file successfully");
         });
     }
 }

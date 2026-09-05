@@ -15,34 +15,26 @@ public static class AssetInfoTools
         [Description("Optional engine version override (e.g. '4.27', '5.5')")]
         string? engineVersion = null)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
-                var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
+            var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
+            var asset = session.Asset;
 
-                var info = new
-                {
-                    fileName = Path.GetFileName(filePath),
-                    filePath = session.FilePath,
-                    fileSize = new FileInfo(session.FilePath).Length,
-                    engineVersion = session.EngineVersion.ToString(),
-                    objectVersion = asset.ObjectVersion.ToString(),
-                    packageFlags = asset.PackageFlags.ToString(),
-                    exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count,
-                    packageGuid = asset.PackageGuid.ToString(),
-                    isDirty = session.IsDirty
-                };
-
-                return ToolHelpers.FormatSuccess(info);
-            }
-            catch (Exception ex)
+            var info = new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                fileName = Path.GetFileName(filePath),
+                filePath = session.FilePath,
+                fileSize = new FileInfo(session.FilePath).Length,
+                engineVersion = session.EngineVersion.ToString(),
+                objectVersion = asset.ObjectVersion.ToString(),
+                packageFlags = asset.PackageFlags.ToString(),
+                exportCount = asset.Exports.Count,
+                importCount = asset.Imports.Count,
+                packageGuid = asset.PackageGuid.ToString(),
+                isDirty = session.IsDirty
+            };
+
+            return ToolHelpers.FormatSuccess(info);
         });
     }
 
@@ -53,55 +45,47 @@ public static class AssetInfoTools
         [Description("Optional engine version override")]
         string? engineVersion = null)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
+            var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
+            var asset = session.Asset;
+
+            var info = new
             {
-                var overrideVersion = string.IsNullOrEmpty(engineVersion) ? null : (UAssetAPI.UnrealTypes.EngineVersion?)ToolHelpers.ParseEngineVersion(engineVersion);
-                var session = AssetSessionService.GetOrLoadSession(filePath, overrideVersion);
-                var asset = session.Asset;
+                fileName = Path.GetFileName(filePath),
+                filePath = session.FilePath,
+                fileSize = new FileInfo(session.FilePath).Length,
+                isDirty = session.IsDirty,
 
-                var info = new
-                {
-                    fileName = Path.GetFileName(filePath),
-                    filePath = session.FilePath,
-                    fileSize = new FileInfo(session.FilePath).Length,
-                    isDirty = session.IsDirty,
+                // Versions
+                engineVersion = session.EngineVersion.ToString(),
+                legacyFileVersion = asset.LegacyFileVersion,
+                isUnversioned = asset.IsUnversioned,
+                fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
+                objectVersion = asset.ObjectVersion.ToString(),
+                objectVersionUE5 = asset.ObjectVersionUE5.ToString(),
 
-                    // Versions
-                    engineVersion = session.EngineVersion.ToString(),
-                    legacyFileVersion = asset.LegacyFileVersion,
-                    isUnversioned = asset.IsUnversioned,
-                    fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
-                    objectVersion = asset.ObjectVersion.ToString(),
-                    objectVersionUE5 = asset.ObjectVersionUE5.ToString(),
+                // Package Header Info
+                packageFlags = asset.PackageFlags.ToString(),
+                packageGuid = asset.PackageGuid.ToString(),
+                packageSource = asset.PackageSource,
+                folderName = asset.FolderName?.ToString() ?? "None",
+                recordedEngineVersion = $"{asset.RecordedEngineVersion.Major}.{asset.RecordedEngineVersion.Minor}.{asset.RecordedEngineVersion.Patch} (CL {asset.RecordedEngineVersion.Changelist})",
+                recordedCompatibleWithEngineVersion = $"{asset.RecordedCompatibleWithEngineVersion.Major}.{asset.RecordedCompatibleWithEngineVersion.Minor}.{asset.RecordedCompatibleWithEngineVersion.Patch} (CL {asset.RecordedCompatibleWithEngineVersion.Changelist})",
 
-                    // Package Header Info
-                    packageFlags = asset.PackageFlags.ToString(),
-                    packageGuid = asset.PackageGuid.ToString(),
-                    packageSource = asset.PackageSource,
-                    folderName = asset.FolderName?.ToString() ?? "None",
-                    recordedEngineVersion = $"{asset.RecordedEngineVersion.Major}.{asset.RecordedEngineVersion.Minor}.{asset.RecordedEngineVersion.Patch} (CL {asset.RecordedEngineVersion.Changelist})",
-                    recordedCompatibleWithEngineVersion = $"{asset.RecordedCompatibleWithEngineVersion.Major}.{asset.RecordedCompatibleWithEngineVersion.Minor}.{asset.RecordedCompatibleWithEngineVersion.Patch} (CL {asset.RecordedCompatibleWithEngineVersion.Changelist})",
+                // Tables and Counts
+                exportCount = asset.Exports.Count,
+                importCount = asset.Imports.Count,
+                nameCount = asset.GetNameMapIndexList().Count,
+                softObjectPathListCount = asset.SoftObjectPathList?.Count ?? 0,
+                gatherableTextDataCount = asset.GatherableTextData?.Count ?? 0,
+                assetRegistryRecordCount = asset.AssetRegistryRecords?.Count ?? 0,
+                hasWorldTileInfo = asset.WorldTileInfo != null,
+                customVersionCount = asset.CustomVersionContainer?.Count ?? 0,
+                chunkIDs = asset.ChunkIDs
+            };
 
-                    // Tables and Counts
-                    exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count,
-                    nameCount = asset.GetNameMapIndexList().Count,
-                    softObjectPathListCount = asset.SoftObjectPathList?.Count ?? 0,
-                    gatherableTextDataCount = asset.GatherableTextData?.Count ?? 0,
-                    assetRegistryRecordCount = asset.AssetRegistryRecords?.Count ?? 0,
-                    hasWorldTileInfo = asset.WorldTileInfo != null,
-                    customVersionCount = asset.CustomVersionContainer?.Count ?? 0,
-                    chunkIDs = asset.ChunkIDs
-                };
-
-                return ToolHelpers.FormatSuccess(info);
-            }
-            catch (Exception ex)
-            {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+            return ToolHelpers.FormatSuccess(info);
         });
     }
 
@@ -110,25 +94,17 @@ public static class AssetInfoTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var paths = session.Asset.SoftObjectPathList?.Select((sop, idx) => new
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var paths = session.Asset.SoftObjectPathList?.Select((sop, idx) => new
-                {
-                    index = idx,
-                    packageName = sop.AssetPath.PackageName?.ToString(),
-                    assetName = sop.AssetPath.AssetName?.ToString(),
-                    subPathString = sop.SubPathString?.ToString()
-                }).ToList() ?? [];
+                index = idx,
+                packageName = sop.AssetPath.PackageName?.ToString(),
+                assetName = sop.AssetPath.AssetName?.ToString(),
+                subPathString = sop.SubPathString?.ToString()
+            }).ToList() ?? [];
 
-                return ToolHelpers.FormatSuccess(new { count = paths.Count, paths });
-            }
-            catch (Exception ex)
-            {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+            return ToolHelpers.FormatSuccess(new { count = paths.Count, paths });
         });
     }
 
@@ -137,24 +113,16 @@ public static class AssetInfoTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var textData = session.Asset.GatherableTextData?.Select((td, idx) => new
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var textData = session.Asset.GatherableTextData?.Select((td, idx) => new
-                {
-                    index = idx,
-                    namespaceName = td.NamespaceName?.ToString(),
-                    sourceData = td.SourceData.SourceString?.ToString()
-                }).ToList() ?? [];
+                index = idx,
+                namespaceName = td.NamespaceName?.ToString(),
+                sourceData = td.SourceData.SourceString?.ToString()
+            }).ToList() ?? [];
 
-                return ToolHelpers.FormatSuccess(new { count = textData.Count, textData });
-            }
-            catch (Exception ex)
-            {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+            return ToolHelpers.FormatSuccess(new { count = textData.Count, textData });
         });
     }
 
@@ -163,25 +131,17 @@ public static class AssetInfoTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var records = session.Asset.AssetRegistryRecords?.Select((rec, idx) => new
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var records = session.Asset.AssetRegistryRecords?.Select((rec, idx) => new
-                {
-                    index = idx,
-                    objectPath = rec.Path,
-                    objectClassName = rec.ClassName,
-                    tags = rec.TagMap
-                }).ToList() ?? [];
+                index = idx,
+                objectPath = rec.Path,
+                objectClassName = rec.ClassName,
+                tags = rec.TagMap
+            }).ToList() ?? [];
 
-                return ToolHelpers.FormatSuccess(new { count = records.Count, records });
-            }
-            catch (Exception ex)
-            {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+            return ToolHelpers.FormatSuccess(new { count = records.Count, records });
         });
     }
 
@@ -190,30 +150,22 @@ public static class AssetInfoTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var tileInfo = session.Asset.WorldTileInfo;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var tileInfo = session.Asset.WorldTileInfo;
 
-                if (tileInfo == null)
-                {
-                    return ToolHelpers.FormatSuccess(null, "No WorldTileInfo present in asset");
-                }
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    position = tileInfo.Position,
-                    bounds = tileInfo.Bounds,
-                    layer = tileInfo.Layer,
-                    lodListCount = tileInfo.LODList?.Length ?? 0
-                });
-            }
-            catch (Exception ex)
+            if (tileInfo == null)
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
+                return ToolHelpers.FormatSuccess(null, "No WorldTileInfo present in asset");
             }
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                position = tileInfo.Position,
+                bounds = tileInfo.Bounds,
+                layer = tileInfo.Layer,
+                lodListCount = tileInfo.LODList?.Length ?? 0
+            });
         });
     }
 }

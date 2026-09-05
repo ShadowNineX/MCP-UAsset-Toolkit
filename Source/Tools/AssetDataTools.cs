@@ -15,28 +15,20 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                return ToolHelpers.FormatSuccess(new
-                {
-                    filePath = session.FilePath,
-                    engineVersion = session.EngineVersion.ToString(),
-                    objectVersion = asset.ObjectVersion.ToString(),
-                    packageFlags = asset.PackageFlags.ToString(),
-                    exportCount = asset.Exports.Count,
-                    importCount = asset.Imports.Count,
-                    isDirty = session.IsDirty
-                });
-            }
-            catch (Exception ex)
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                filePath = session.FilePath,
+                engineVersion = session.EngineVersion.ToString(),
+                objectVersion = asset.ObjectVersion.ToString(),
+                packageFlags = asset.PackageFlags.ToString(),
+                exportCount = asset.Exports.Count,
+                importCount = asset.Imports.Count,
+                isDirty = session.IsDirty
+            });
         });
     }
 
@@ -45,29 +37,21 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                return ToolHelpers.FormatSuccess(new
-                {
-                    legacyFileVersion = asset.LegacyFileVersion,
-                    isUnversioned = asset.IsUnversioned,
-                    fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
-                    packageGuid = asset.PackageGuid.ToString(),
-                    packageFlags = asset.PackageFlags.ToString(),
-                    packageSource = asset.PackageSource,
-                    folderName = asset.FolderName?.ToString() ?? "None",
-                    isDirty = session.IsDirty
-                });
-            }
-            catch (Exception ex)
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                legacyFileVersion = asset.LegacyFileVersion,
+                isUnversioned = asset.IsUnversioned,
+                fileVersionLicenseeUE = asset.FileVersionLicenseeUE,
+                packageGuid = asset.PackageGuid.ToString(),
+                packageFlags = asset.PackageFlags.ToString(),
+                packageSource = asset.PackageSource,
+                folderName = asset.FolderName?.ToString() ?? "None",
+                isDirty = session.IsDirty
+            });
         });
     }
 
@@ -76,53 +60,45 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                var exports = asset.Exports.Select((export, index) => new
-                {
-                    index = index + 1,
-                    objectName = export.ObjectName.ToString(),
-                    outerIndex = export.OuterIndex.Index,
-                    classIndex = export.ClassIndex.Index,
-                    className = export.ClassIndex.IsImport()
-                        ? export.ClassIndex.ToImport(asset).ObjectName.ToString()
-                        : "Class",
-                    superIndex = export.SuperIndex.Index,
-                    templateIndex = export.TemplateIndex.Index,
-                    exportType = export.GetType().Name,
-                    objectFlags = export.ObjectFlags.ToString(),
-                    serialSize = export.SerialSize,
-                    serialOffset = export.SerialOffset,
-                    export.bForcedExport,
-                    export.bNotForClient,
-                    export.bNotForServer,
-                    packageGuid = export.PackageGuid.ToString(),
-                    isInheritedInstance = export.IsInheritedInstance,
-                    packageFlags = export.PackageFlags.ToString(),
-                    export.bNotAlwaysLoadedForEditorGame,
-                    export.bIsAsset,
-                    generatePublicHash = export.GeneratePublicHash,
-                    serializationBeforeSerializationDependencies = export.SerializationBeforeSerializationDependencies.Count,
-                    createBeforeSerializationDependencies = export.CreateBeforeSerializationDependencies.Count,
-                    serializationBeforeCreateDependencies = export.SerializationBeforeCreateDependencies.Count,
-                    createBeforeCreateDependencies = export.CreateBeforeCreateDependencies.Count
-                }).ToList();
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    count = exports.Count,
-                    exports
-                });
-            }
-            catch (Exception ex)
+            var exports = asset.Exports.Select((export, index) => new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                index = index + 1,
+                objectName = export.ObjectName.ToString(),
+                outerIndex = export.OuterIndex.Index,
+                classIndex = export.ClassIndex.Index,
+                className = export.ClassIndex.IsImport()
+                    ? export.ClassIndex.ToImport(asset).ObjectName.ToString()
+                    : "Class",
+                superIndex = export.SuperIndex.Index,
+                templateIndex = export.TemplateIndex.Index,
+                exportType = export.GetType().Name,
+                objectFlags = export.ObjectFlags.ToString(),
+                serialSize = export.SerialSize,
+                serialOffset = export.SerialOffset,
+                export.bForcedExport,
+                export.bNotForClient,
+                export.bNotForServer,
+                packageGuid = export.PackageGuid.ToString(),
+                isInheritedInstance = export.IsInheritedInstance,
+                packageFlags = export.PackageFlags.ToString(),
+                export.bNotAlwaysLoadedForEditorGame,
+                export.bIsAsset,
+                generatePublicHash = export.GeneratePublicHash,
+                serializationBeforeSerializationDependencies = export.SerializationBeforeSerializationDependencies.Count,
+                createBeforeSerializationDependencies = export.CreateBeforeSerializationDependencies.Count,
+                serializationBeforeCreateDependencies = export.SerializationBeforeCreateDependencies.Count,
+                createBeforeCreateDependencies = export.CreateBeforeCreateDependencies.Count
+            }).ToList();
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                count = exports.Count,
+                exports
+            });
         });
     }
 
@@ -131,34 +107,26 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                var imports = asset.Imports.Select((import, index) => new
-                {
-                    index = index + 1,
-                    classPackage = import.ClassPackage.ToString(),
-                    className = import.ClassName.ToString(),
-                    outerIndex = import.OuterIndex.Index,
-                    objectName = import.ObjectName.ToString(),
-                    packageName = import.PackageName?.ToString(),
-                    import.bImportOptional
-                }).ToList();
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    count = imports.Count,
-                    imports
-                });
-            }
-            catch (Exception ex)
+            var imports = asset.Imports.Select((import, index) => new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                index = index + 1,
+                classPackage = import.ClassPackage.ToString(),
+                className = import.ClassName.ToString(),
+                outerIndex = import.OuterIndex.Index,
+                objectName = import.ObjectName.ToString(),
+                packageName = import.PackageName?.ToString(),
+                import.bImportOptional
+            }).ToList();
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                count = imports.Count,
+                imports
+            });
         });
     }
 
@@ -167,40 +135,32 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+
+            if (asset.CustomVersionContainer == null || asset.CustomVersionContainer.Count == 0)
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-
-                if (asset.CustomVersionContainer == null || asset.CustomVersionContainer.Count == 0)
-                {
-                    return ToolHelpers.FormatSuccess(new
-                    {
-                        count = 0,
-                        customVersions = Array.Empty<object>()
-                    });
-                }
-
-                var customVersions = asset.CustomVersionContainer.Select(cv => new
-                {
-                    friendlyName = cv.FriendlyName ?? CustomVersion.GetCustomVersionFriendlyNameFromGuid(cv.Key),
-                    version = cv.Version,
-                    key = cv.Key.ToString(),
-                    name = cv.Name?.ToString()
-                }).ToList();
-
                 return ToolHelpers.FormatSuccess(new
                 {
-                    count = customVersions.Count,
-                    customVersions
+                    count = 0,
+                    customVersions = Array.Empty<object>()
                 });
             }
-            catch (Exception ex)
+
+            var customVersions = asset.CustomVersionContainer.Select(cv => new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                friendlyName = cv.FriendlyName ?? CustomVersion.GetCustomVersionFriendlyNameFromGuid(cv.Key),
+                version = cv.Version,
+                key = cv.Key.ToString(),
+                name = cv.Name?.ToString()
+            }).ToList();
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                count = customVersions.Count,
+                customVersions
+            });
         });
     }
 
@@ -209,31 +169,23 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-                var nameMap = asset.GetNameMapIndexList();
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+            var nameMap = asset.GetNameMapIndexList();
 
-                var nameEntries = nameMap.Select((name, index) => new
-                {
-                    index,
-                    name = name?.Value ?? "null",
-                    encoding = name?.Encoding?.WebName ?? "unknown"
-                }).ToList();
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    count = nameEntries.Count,
-                    names = nameEntries
-                });
-            }
-            catch (Exception ex)
+            var nameEntries = nameMap.Select((name, index) => new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                index,
+                name = name?.Value ?? "null",
+                encoding = name?.Encoding?.WebName ?? "unknown"
+            }).ToList();
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                count = nameEntries.Count,
+                names = nameEntries
+            });
         });
     }
 
@@ -244,77 +196,77 @@ public static class AssetDataTools
         [Description("Export index (1-based)")]
         int exportIndex)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+
+            if (exportIndex < 1 || exportIndex > asset.Exports.Count)
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-
-                if (exportIndex < 1 || exportIndex > asset.Exports.Count)
-                {
-                    return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
-                }
-
-                var export = asset.Exports[exportIndex - 1];
-
-                var exportData = new
-                {
-                    index = exportIndex,
-                    objectName = export.ObjectName.ToString(),
-                    className = export.ClassIndex.IsImport()
-                        ? export.ClassIndex.ToImport(asset).ObjectName.ToString()
-                        : "Class",
-                    exportType = export.GetType().Name,
-                    serialSize = export.SerialSize,
-                    serialOffset = export.SerialOffset,
-                    export.bForcedExport,
-                    export.bNotForClient,
-                    export.bNotForServer,
-                    properties = export is NormalExport normalExport
-                        ? normalExport.Data?.Select(prop => new
-                        {
-                            name = prop.Name.ToString(),
-                            propertyType = prop.PropertyType.ToString(),
-                            value = ToolHelpers.ConvertPropertyToValue(prop)
-                        }).ToList()
-                        : null
-                };
-
-                return ToolHelpers.FormatSuccess(exportData);
+                return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
             }
-            catch (Exception ex)
+
+            var export = asset.Exports[exportIndex - 1];
+
+            var exportData = new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                index = exportIndex,
+                objectName = export.ObjectName.ToString(),
+                className = export.ClassIndex.IsImport()
+                    ? export.ClassIndex.ToImport(asset).ObjectName.ToString()
+                    : "Class",
+                exportType = export.GetType().Name,
+                serialSize = export.SerialSize,
+                serialOffset = export.SerialOffset,
+                export.bForcedExport,
+                export.bNotForClient,
+                export.bNotForServer,
+                properties = export is NormalExport normalExport
+                    ? normalExport.Data?.Select(prop => new
+                    {
+                        name = prop.Name.ToString(),
+                        propertyType = prop.PropertyType.ToString(),
+                        value = ToolHelpers.ConvertPropertyToValue(prop)
+                    }).ToList()
+                    : null
+            };
+
+            return ToolHelpers.FormatSuccess(exportData);
         });
     }
 
-    [McpServerTool, Description("Search the name map for entries containing a substring")]
+    [McpServerTool, Description("Search the name map by substring or regular expression")]
     public static Task<string> SearchNameMapAsync(
         [Description("Full path to the .uasset file")]
         string filePath,
         [Description("Search query string")]
-        string query)
+        string query,
+        [Description("Zero-based offset into matching entries")]
+        int offset = 0,
+        [Description("Maximum results to return (1-1000)")]
+        int limit = 100,
+        [Description("Interpret the query as a regular expression")]
+        bool useRegex = false)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var nameMap = session.Asset.GetNameMapIndexList();
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var nameMap = session.Asset.GetNameMapIndexList();
 
-                var matches = nameMap
-                    .Select((name, index) => new { index, value = name?.Value ?? string.Empty })
-                    .Where(x => x.value.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+            var candidates = nameMap
+                .Select((name, index) => new { index, value = name?.Value ?? string.Empty })
+                .ToList();
 
-                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
-            }
-            catch (Exception ex)
+            var results = AssetSearch.Search(candidates, query, static candidate => new[] { candidate.value }, offset, limit, useRegex);
+
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                count = results.Matches.Count,
+                matches = results.Matches,
+                query,
+                totalCount = results.TotalCount,
+                offset = results.Offset,
+                limit = results.Limit,
+                hasMore = results.HasMore
+            });
         });
     }
 
@@ -323,35 +275,47 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath,
         [Description("Search query string")]
-        string query)
+        string query,
+        [Description("Zero-based offset into matching entries")]
+        int offset = 0,
+        [Description("Maximum results to return (1-1000)")]
+        int limit = 100,
+        [Description("Interpret the query as a regular expression")]
+        bool useRegex = false)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                var matches = asset.Imports
-                    .Select((imp, index) => new
-                    {
-                        index = index + 1,
-                        objectName = imp.ObjectName.ToString(),
-                        className = imp.ClassName.ToString(),
-                        classPackage = imp.ClassPackage.ToString(),
-                        outerIndex = imp.OuterIndex.Index
-                    })
-                    .Where(x => x.objectName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                                x.className.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                                x.classPackage.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+            var candidates = asset.Imports
+                .Select((imp, index) => new
+                {
+                    index = index + 1,
+                    objectName = imp.ObjectName.ToString(),
+                    className = imp.ClassName.ToString(),
+                    classPackage = imp.ClassPackage.ToString(),
+                    outerIndex = imp.OuterIndex.Index
+                })
+                .ToList();
 
-                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
-            }
-            catch (Exception ex)
+            var results = AssetSearch.Search(
+                candidates,
+                query,
+                static candidate => new[] { candidate.objectName, candidate.className, candidate.classPackage },
+                offset,
+                limit,
+                useRegex);
+
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                count = results.Matches.Count,
+                matches = results.Matches,
+                query,
+                totalCount = results.TotalCount,
+                offset = results.Offset,
+                limit = results.Limit,
+                hasMore = results.HasMore
+            });
         });
     }
 
@@ -360,35 +324,48 @@ public static class AssetDataTools
         [Description("Full path to the .uasset file")]
         string filePath,
         [Description("Search query string")]
-        string query)
+        string query,
+        [Description("Zero-based offset into matching entries")]
+        int offset = 0,
+        [Description("Maximum results to return (1-1000)")]
+        int limit = 100,
+        [Description("Interpret the query as a regular expression")]
+        bool useRegex = false)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
 
-                var matches = asset.Exports
-                    .Select((exp, index) => new
-                    {
-                        index = index + 1,
-                        objectName = exp.ObjectName.ToString(),
-                        className = exp.ClassIndex.IsImport()
-                            ? exp.ClassIndex.ToImport(asset).ObjectName.ToString()
-                            : "Class",
-                        exportType = exp.GetType().Name
-                    })
-                    .Where(x => x.objectName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                                x.className.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+            var candidates = asset.Exports
+                .Select((exp, index) => new
+                {
+                    index = index + 1,
+                    objectName = exp.ObjectName.ToString(),
+                    className = exp.ClassIndex.IsImport()
+                        ? exp.ClassIndex.ToImport(asset).ObjectName.ToString()
+                        : "Class",
+                    exportType = exp.GetType().Name
+                })
+                .ToList();
 
-                return ToolHelpers.FormatSuccess(new { count = matches.Count, matches, query });
-            }
-            catch (Exception ex)
+            var results = AssetSearch.Search(
+                candidates,
+                query,
+                static candidate => new[] { candidate.objectName, candidate.className },
+                offset,
+                limit,
+                useRegex);
+
+            return ToolHelpers.FormatSuccess(new
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
-            }
+                count = results.Matches.Count,
+                matches = results.Matches,
+                query,
+                totalCount = results.TotalCount,
+                offset = results.Offset,
+                limit = results.Limit,
+                hasMore = results.HasMore
+            });
         });
     }
 }

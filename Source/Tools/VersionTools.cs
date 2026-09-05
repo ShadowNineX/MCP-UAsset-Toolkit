@@ -7,7 +7,7 @@ using UAssetAPI.UnrealTypes;
 
 namespace MCP_UAsset_Toolkit.Source.Tools;
 
-[McpServerToolType]
+[McpServerToolType, McpServerResourceType]
 public static class VersionTools
 {
     [McpServerTool, Description("Set the default Unreal Engine version for asset parsing")]
@@ -15,7 +15,7 @@ public static class VersionTools
         [Description("Engine version (e.g., '4.27', '5.0', '5.1', '5.5', '5.7', '5.0EA')")]
         string version)
     {
-        return Task.Run(() =>
+        return ToolHelpers.ExecuteAsync(() =>
         {
             try
             {
@@ -38,7 +38,7 @@ public static class VersionTools
     [McpServerTool, Description("Get list of all supported Unreal Engine versions")]
     public static Task<string> GetSupportedEngineVersionsAsync()
     {
-        return Task.Run(() =>
+        return ToolHelpers.ExecuteAsync(() =>
         {
             var versions = Enum.GetNames<EngineVersion>()
                 .Where(v => v.StartsWith("VER_UE"))
@@ -60,7 +60,7 @@ public static class VersionTools
     [McpServerResource(UriTemplate = "engine://version", Title = "Current Unreal Engine version")]
     public static Task<string> GetEngineVersionResourceAsync()
     {
-        return Task.Run(() =>
+        return ToolHelpers.ExecuteAsync(() =>
         {
             if (!EngineVersionService.IsVersionSet)
             {

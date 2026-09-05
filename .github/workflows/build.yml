@@ -31,9 +31,12 @@ jobs:
             - name: Build ${{ matrix.configuration }}
               run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
 
+            - name: Test ${{ matrix.configuration }}
+              run: dotnet test --solution "MCP UAsset Toolkit.slnx" --configuration ${{ matrix.configuration }} --no-build
+
             - name: Publish ${{ matrix.configuration }} (Self-contained)
               if: matrix.configuration == 'Release'
-              run: dotnet publish --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/${{ matrix.configuration }}
+              run: dotnet publish "MCP UAsset Toolkit.csproj" --configuration ${{ matrix.configuration }} --runtime win-x64 --self-contained true --output ./publish/${{ matrix.configuration }}
 
             - name: Upload ${{ matrix.configuration }} Artifacts
               if: matrix.configuration == 'Release'

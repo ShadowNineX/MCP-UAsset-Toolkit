@@ -18,7 +18,8 @@ public static class Program
         builder.Services
             .AddMcpServer()
             .WithHttpTransport()
-            .WithToolsFromAssembly();
+            .WithToolsFromAssembly()
+            .WithResourcesFromAssembly();
 
         var app = builder.Build();
 

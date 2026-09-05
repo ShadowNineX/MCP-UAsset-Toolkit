@@ -18,46 +18,38 @@ public static class AssetPropertyTools
         [Description("Export index (1-based)")]
         int exportIndex)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+
+            if (exportIndex < 1 || exportIndex > asset.Exports.Count)
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-
-                if (exportIndex < 1 || exportIndex > asset.Exports.Count)
-                {
-                    return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
-                }
-
-                var export = asset.Exports[exportIndex - 1];
-
-                if (export is not NormalExport normalExport)
-                {
-                    return ToolHelpers.FormatError($"Export {exportIndex} is of type '{export.GetType().Name}', not NormalExport. Properties are only available on NormalExport.");
-                }
-
-                var properties = normalExport.Data?.Select((prop, idx) => new
-                {
-                    index = idx,
-                    name = prop.Name.ToString(),
-                    propertyType = prop.PropertyType.ToString(),
-                    rawType = prop.GetType().Name,
-                    value = ToolHelpers.ConvertPropertyToValue(prop)
-                }).ToList() ?? [];
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    exportIndex,
-                    objectName = export.ObjectName.ToString(),
-                    count = properties.Count,
-                    properties
-                });
+                return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
             }
-            catch (Exception ex)
+
+            var export = asset.Exports[exportIndex - 1];
+
+            if (export is not NormalExport normalExport)
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
+                return ToolHelpers.FormatError($"Export {exportIndex} is of type '{export.GetType().Name}', not NormalExport. Properties are only available on NormalExport.");
             }
+
+            var properties = normalExport.Data?.Select((prop, idx) => new
+            {
+                index = idx,
+                name = prop.Name.ToString(),
+                propertyType = prop.PropertyType.ToString(),
+                rawType = prop.GetType().Name,
+                value = ToolHelpers.ConvertPropertyToValue(prop)
+            }).ToList() ?? [];
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                exportIndex,
+                objectName = export.ObjectName.ToString(),
+                count = properties.Count,
+                properties
+            });
         });
     }
 
@@ -74,56 +66,48 @@ public static class AssetPropertyTools
         [Description("JSON representation of the value (e.g. '100', '\"Hero\"', 'true', '{\"index\":-1}')")]
         string valueJson)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+
+            if (exportIndex < 1 || exportIndex > asset.Exports.Count)
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-
-                if (exportIndex < 1 || exportIndex > asset.Exports.Count)
-                {
-                    return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
-                }
-
-                var export = asset.Exports[exportIndex - 1];
-                if (export is not NormalExport normalExport)
-                {
-                    return ToolHelpers.FormatError($"Export {exportIndex} is of type '{export.GetType().Name}', not NormalExport");
-                }
-
-                normalExport.Data ??= [];
-
-                using var doc = JsonDocument.Parse(valueJson);
-                var element = doc.RootElement;
-
-                var fName = new FName(asset, propertyName);
-                var newProp = ToolHelpers.CreatePropertyData(propertyType, fName, element, asset);
-
-                var existingIdx = normalExport.Data.FindIndex(p => string.Equals(p.Name?.ToString(), propertyName, StringComparison.OrdinalIgnoreCase));
-                if (existingIdx >= 0)
-                {
-                    normalExport.Data[existingIdx] = newProp;
-                }
-                else
-                {
-                    normalExport.Data.Add(newProp);
-                }
-
-                AssetSessionService.MarkDirty(filePath);
-
-                return ToolHelpers.FormatSuccess(new
-                {
-                    exportIndex,
-                    propertyName,
-                    propertyType,
-                    newValue = ToolHelpers.ConvertPropertyToValue(newProp)
-                }, $"Property '{propertyName}' updated on export {exportIndex}. Call save_asset to persist.");
+                return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
             }
-            catch (Exception ex)
+
+            var export = asset.Exports[exportIndex - 1];
+            if (export is not NormalExport normalExport)
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
+                return ToolHelpers.FormatError($"Export {exportIndex} is of type '{export.GetType().Name}', not NormalExport");
             }
+
+            normalExport.Data ??= [];
+
+            using var doc = JsonDocument.Parse(valueJson);
+            var element = doc.RootElement;
+
+            var fName = new FName(asset, propertyName);
+            var newProp = ToolHelpers.CreatePropertyData(propertyType, fName, element, asset);
+
+            var existingIdx = normalExport.Data.FindIndex(p => string.Equals(p.Name?.ToString(), propertyName, StringComparison.OrdinalIgnoreCase));
+            if (existingIdx >= 0)
+            {
+                normalExport.Data[existingIdx] = newProp;
+            }
+            else
+            {
+                normalExport.Data.Add(newProp);
+            }
+
+            AssetSessionService.MarkDirty(filePath);
+
+            return ToolHelpers.FormatSuccess(new
+            {
+                exportIndex,
+                propertyName,
+                propertyType,
+                newValue = ToolHelpers.ConvertPropertyToValue(newProp)
+            }, $"Property '{propertyName}' updated on export {exportIndex}. Call save_asset to persist.");
         });
     }
 
@@ -136,37 +120,29 @@ public static class AssetPropertyTools
         [Description("Property name to remove")]
         string propertyName)
     {
-        return Task.Run(() =>
-        {
-            try
+        return ToolHelpers.ExecuteAsync(() => {
+            var session = AssetSessionService.GetOrLoadSession(filePath);
+            var asset = session.Asset;
+
+            if (exportIndex < 1 || exportIndex > asset.Exports.Count)
             {
-                var session = AssetSessionService.GetOrLoadSession(filePath);
-                var asset = session.Asset;
-
-                if (exportIndex < 1 || exportIndex > asset.Exports.Count)
-                {
-                    return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
-                }
-
-                var export = asset.Exports[exportIndex - 1];
-                if (export is not NormalExport normalExport || normalExport.Data == null)
-                {
-                    return ToolHelpers.FormatError($"Export {exportIndex} has no property data");
-                }
-
-                var removedCount = normalExport.Data.RemoveAll(p => string.Equals(p.Name?.ToString(), propertyName, StringComparison.OrdinalIgnoreCase));
-                if (removedCount > 0)
-                {
-                    AssetSessionService.MarkDirty(filePath);
-                    return ToolHelpers.FormatSuccess(new { exportIndex, propertyName, removedCount }, $"Removed property '{propertyName}' from export {exportIndex}");
-                }
-
-                return ToolHelpers.FormatError($"Property '{propertyName}' not found in export {exportIndex}");
+                return ToolHelpers.FormatError($"Export index {exportIndex} out of range (1-{asset.Exports.Count})");
             }
-            catch (Exception ex)
+
+            var export = asset.Exports[exportIndex - 1];
+            if (export is not NormalExport normalExport || normalExport.Data == null)
             {
-                return ToolHelpers.FormatError(ex.Message, ex);
+                return ToolHelpers.FormatError($"Export {exportIndex} has no property data");
             }
+
+            var removedCount = normalExport.Data.RemoveAll(p => string.Equals(p.Name?.ToString(), propertyName, StringComparison.OrdinalIgnoreCase));
+            if (removedCount > 0)
+            {
+                AssetSessionService.MarkDirty(filePath);
+                return ToolHelpers.FormatSuccess(new { exportIndex, propertyName, removedCount }, $"Removed property '{propertyName}' from export {exportIndex}");
+            }
+
+            return ToolHelpers.FormatError($"Property '{propertyName}' not found in export {exportIndex}");
         });
     }
 }
