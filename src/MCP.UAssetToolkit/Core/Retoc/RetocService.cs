@@ -60,6 +60,7 @@ public static class RetocService
                 return new RetocConversionResult(result, []);
             }
             EnsureExpectedFiles([stagedOutput]);
+            cancellationToken.ThrowIfCancellationRequested();
             Publish([new FileTransfer(stagedOutput, output)]);
             TryDeleteStage(stage);
             return new RetocConversionResult(result, [output]);
@@ -102,6 +103,7 @@ public static class RetocService
             var result = await RunAsync(options?.RetocPath, arguments, options?.AesKey, ValidateTimeout(options), cancellationToken);
             EnsureSuccess(result, "to-zen", stage);
             EnsureExpectedFiles([stagedUtoc, stagedUcas, stagedPak]);
+            cancellationToken.ThrowIfCancellationRequested();
             Publish([new FileTransfer(stagedUtoc, outputUtoc), new FileTransfer(stagedUcas, outputUcas), new FileTransfer(stagedPak, outputPak)]);
             TryDeleteStage(stage);
             return new RetocConversionResult(result, [outputUtoc, outputUcas, outputPak]);
@@ -129,11 +131,18 @@ public static class RetocService
         return arguments;
     }
 
-    private static async Task<RetocCommandResult> RunAsync(string? retocPath, IReadOnlyList<string> arguments, string? aesKey, int timeoutSeconds, CancellationToken cancellationToken)
+    internal static Task<RetocCommandResult> RunAsync(string? retocPath, IReadOnlyList<string> arguments, string? aesKey, int timeoutSeconds, CancellationToken cancellationToken) =>
+        RunCoreAsync(retocPath, arguments, aesKey, timeoutSeconds, cancellationToken, null);
+
+    internal static Task<RetocCommandResult> RunInDirectoryAsync(string? retocPath, IReadOnlyList<string> arguments, string? aesKey, int timeoutSeconds, CancellationToken cancellationToken, string workingDirectory) =>
+        RunCoreAsync(retocPath, arguments, aesKey, timeoutSeconds, cancellationToken, workingDirectory);
+
+    private static async Task<RetocCommandResult> RunCoreAsync(string? retocPath, IReadOnlyList<string> arguments, string? aesKey, int timeoutSeconds, CancellationToken cancellationToken, string? workingDirectory)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var executable = ResolveExecutable(retocPath);
         var startInfo = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        if (!string.IsNullOrWhiteSpace(workingDirectory)) startInfo.WorkingDirectory = workingDirectory;
         foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = startInfo };
         cancellationToken.ThrowIfCancellationRequested();
@@ -320,7 +329,7 @@ public static class RetocService
         if (options.Filters?.Any(string.IsNullOrWhiteSpace) == true) throw new ArgumentException("Filters cannot contain blank values.");
         if (!string.IsNullOrWhiteSpace(options.LegacyEngineVersion)) RequireEngineVersion(options.LegacyEngineVersion);
     }
-    private static void ValidateForOperation(string action, RetocOptions? options)
+    internal static void ValidateForOperation(string action, RetocOptions? options)
     {
         ValidateOptions(options);
         if (options is null) return;
@@ -330,8 +339,8 @@ public static class RetocService
         if (hasLegacyOnlyOptions && action != "to-legacy") throw new ArgumentException("Legacy conversion options are only supported by convert_to_legacy.");
         if (options.Filters?.Count > 0 && action is not "to-legacy" and not "to-zen") throw new ArgumentException("Filters are only supported by conversion tools.");
     }
-    private static int ValidateTimeout(RetocOptions? options) { ValidateOptions(options); return options?.TimeoutSeconds ?? 300; }
-    private static string RequireEngineVersion(string engineVersion)
+    internal static int ValidateTimeout(RetocOptions? options) { ValidateOptions(options); return options?.TimeoutSeconds ?? 300; }
+    internal static string RequireEngineVersion(string engineVersion)
     {
         var value = engineVersion?.Trim() ?? string.Empty;
         if (!EngineVersions.Contains(value)) throw new ArgumentException("engineVersion must be a retoc EngineVersion enum name (UE4_25 through UE4_27 or UE5_0 through UE5_7), such as UE5_4.", nameof(engineVersion));

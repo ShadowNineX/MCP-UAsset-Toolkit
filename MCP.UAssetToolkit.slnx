@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MCP.UAssetToolkit/MCP.UAssetToolkit.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="Tests/MCP.UAssetToolkit.Tests/MCP.UAssetToolkit.Tests.csproj" />
+  </Folder>
+  <Folder Name="/dependencies/">
+    <Project Path="UAssetAPI/UAssetAPI/UAssetAPI.csproj" />
+  </Folder>
+</Solution>

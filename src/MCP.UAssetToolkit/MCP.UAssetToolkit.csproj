@@ -3,25 +3,15 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>MCP UAsset Toolkit</AssemblyName>
     <RootNamespace>MCP_UAsset_Toolkit</RootNamespace>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
     <StartupObject>MCP_UAsset_Toolkit.Source.Program</StartupObject>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <PublishSelfContained>true</PublishSelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Tests\**;artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
-
-  <ItemGroup>
-    <Compile Remove="UAssetAPI\**" />
-    <Content Remove="UAssetAPI\**" />
-    <EmbeddedResource Remove="UAssetAPI\**" />
-    <None Remove="UAssetAPI\**" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CUE4Parse" Version="1.2.2.202609" />
@@ -32,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="UAssetAPI\UAssetAPI\UAssetAPI.csproj">
+    <ProjectReference Include="../../UAssetAPI/UAssetAPI/UAssetAPI.csproj">
       <PrivateAssets>all</PrivateAssets>
     </ProjectReference>
   </ItemGroup>

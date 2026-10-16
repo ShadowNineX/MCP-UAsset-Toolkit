@@ -1,0 +1,7 @@
+<Project>
+  <!-- Shared defaults for toolkit projects only; upstream projects keep their own policy. -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,4 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)eng/Toolkit.props"
+          Condition="'$(MSBuildProjectName)' == 'MCP.UAssetToolkit' Or '$(MSBuildProjectName)' == 'MCP.UAssetToolkit.Tests'" />
+</Project>

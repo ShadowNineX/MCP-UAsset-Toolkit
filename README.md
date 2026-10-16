@@ -13,7 +13,7 @@ Give AI assistants tools to inspect, edit, and package Unreal Engine assets thro
 - **Work with archives:** browse CUE4Parse packages, supply AES keys, extract companion files, and create `.pak` archives.
 - **Use IoStore:** inspect, verify, and convert containers through an installed retoc executable.
 
-See the **[capability guide](docs/CAPABILITIES.md)** for tool names, examples, and compatibility limits. It maps practical UAssetGUI workflows to MCP tools; game support depends on the underlying libraries, engine version, and mappings. Visual media previews and media conversion are not included.
+See the **[capability guide](docs/CAPABILITIES.md)** for examples and compatibility limits, and the **[97-tool catalog](docs/TOOLS.md)** for the complete exposed interface. Named DataTable editing, atomic/bulk document patches, resolved dependencies, mapping enums, archive object queries, and retoc chunk workflows are included. Game support depends on the underlying libraries, engine version, and mappings. Visual media previews and media conversion are not included.
 
 ## Quick start
 
@@ -22,12 +22,12 @@ Requires **Windows x64** and the **.NET 10 SDK** to build from source.
 ```powershell
 git clone --recurse-submodules https://github.com/hedgehogform/MCP-UAsset-Toolkit.git
 cd MCP-UAsset-Toolkit
-dotnet run --project "MCP UAsset Toolkit.csproj"
+dotnet run --project src/MCP.UAssetToolkit/MCP.UAssetToolkit.csproj
 ```
 
 For an existing checkout, initialize its pinned dependency with `git submodule update --init --recursive`.
 
-Connect your MCP client to **`http://127.0.0.1:13338/sse`** using its HTTP server configuration. The server binds to loopback by default; change the endpoint in `appsettings.json` if needed.
+Connect your MCP client to **`http://127.0.0.1:13338/sse`** using its HTTP server configuration. The server binds to loopback by default; change the endpoint in `src/MCP.UAssetToolkit/appsettings.json` if needed.
 
 A typical asset workflow is `open_asset` → inspect/search → edit → `validate_asset` → `save_asset`. Edits stay in the session until saved. Dirty sessions require an explicit discard before closing or reloading.
 
@@ -39,14 +39,24 @@ Run `retoc_status` through your MCP client to check availability. The toolkit se
 
 ```powershell
 # .NET 10 / xUnit / Microsoft.Testing.Platform
-dotnet test --solution "MCP UAsset Toolkit.slnx"
-dotnet test --solution "MCP UAsset Toolkit.slnx" --configuration Release
+dotnet test --solution MCP.UAssetToolkit.slnx
+dotnet test --solution MCP.UAssetToolkit.slnx --configuration Release
 
 # Self-contained Windows build
-dotnet publish "MCP UAsset Toolkit.csproj" -c Release -r win-x64 --self-contained true
+dotnet publish src/MCP.UAssetToolkit/MCP.UAssetToolkit.csproj -c Release -r win-x64 --self-contained true
 ```
 
-`Source/Tools` defines the MCP interface; `Source/Services` owns asset, archive, and process operations; `Source/Models` holds typed inputs and session state. Tests cover asset roundtrips, atomic edits, archive workflows, tool schemas, and optional retoc execution. See [development notes](docs/CAPABILITIES.md#development-and-verification) for fixture and build details.
+Run `./eng/Verify.ps1` to restore, build, and test Debug and Release, or add `-Publish` to produce the Windows executable under `artifacts/publish/Release`.
+
+| Path | Purpose |
+| --- | --- |
+| `src/MCP.UAssetToolkit/Core/` | Asset, archive, engine, mapping, and retoc operations and models, grouped by feature. |
+| `src/MCP.UAssetToolkit/Tools/` | MCP tools and shared response helpers, grouped by feature. |
+| `Tests/MCP.UAssetToolkit.Tests/` | Asset roundtrips, atomic edits, archive workflows, tool schemas, and optional retoc execution. |
+| `eng/` | Shared build settings and local verification. |
+| `UAssetAPI/` | Pinned upstream submodule. |
+
+See the [architecture guide](docs/ARCHITECTURE.md) for code ownership and [development notes](docs/CAPABILITIES.md#development-and-verification) for fixtures and build details.
 
 ## Dependencies
 
