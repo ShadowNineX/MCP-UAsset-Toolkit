@@ -20,6 +20,10 @@ dotnet publish src/MCP.UAssetToolkit/MCP.UAssetToolkit.csproj --configuration Re
 
 Avoid simultaneous builds: UAssetAPI creates and deletes `git_commit.txt` during its build. Keep the upstream submodule pristine. The toolkit's tests are under `Tests/MCP.UAssetToolkit.Tests`; UAssetAPI's separate upstream suite is not included in the root solution.
 
+Nullable reference types are enabled centrally in `eng/Toolkit.props` for both toolkit projects. Keep that policy global; do not add per-file `#nullable enable` directives to compensate for source-only analyzer findings.
+
+SonarQube Cloud automatic analysis reads `.sonarcloud.properties`; `sonar-project.properties` identifies the project for CLI queries and CI analysis. Keep source and test scopes separate and exclude the pinned UAssetAPI submodule from toolkit analysis.
+
 ## Code ownership
 
 - `src/MCP.UAssetToolkit/Program.cs`: HTTP hosting and MCP registration.

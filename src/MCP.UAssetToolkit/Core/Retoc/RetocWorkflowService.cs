@@ -6,13 +6,14 @@ namespace MCP_UAsset_Toolkit.Source.Services;
 /// <summary>Typed, safety-preserving workflows for retoc commands that are not conversions.</summary>
 public static class RetocWorkflowService
 {
+    private const string UtocExtension = ".utoc";
     private const int ManifestOutputLimit = 64 * 1024;
 
     public static async Task<RetocManifestResult> ExtractManifestAsync(string utocPath, RetocOptions? options, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         RetocService.ValidateForOperation("manifest", options);
-        var input = RequireFile(utocPath, ".utoc", nameof(utocPath));
+        var input = RequireFile(utocPath, UtocExtension, nameof(utocPath));
         var stage = CreateStage(Path.Combine(Path.GetTempPath(), "manifest.json"));
         try
         {
@@ -40,7 +41,7 @@ public static class RetocWorkflowService
         RunReadOnlyAsync("asset-registry", RequireExistingFile(assetRegistryPath, nameof(assetRegistryPath)), options, cancellationToken);
 
     public static Task<RetocCommandResult> PrintScriptObjectsAsync(string utocPath, RetocOptions? options, CancellationToken cancellationToken = default) =>
-        RunReadOnlyAsync("print-script-objects", RequireFile(utocPath, ".utoc", nameof(utocPath)), options, cancellationToken);
+        RunReadOnlyAsync("print-script-objects", RequireFile(utocPath, UtocExtension, nameof(utocPath)), options, cancellationToken);
 
     public static Task<RetocWorkflowResult> UnpackAsync(string utocPath, string outputDirectory, RetocOptions? options, CancellationToken cancellationToken = default) =>
         UnpackCoreAsync("unpack", utocPath, outputDirectory, options, cancellationToken);
@@ -53,7 +54,7 @@ public static class RetocWorkflowService
         cancellationToken.ThrowIfCancellationRequested();
         RetocService.ValidateForOperation("pack-raw", options);
         var input = RequireDirectory(inputDirectory, nameof(inputDirectory));
-        var outputUtoc = RequireNewFile(outputUtocPath, ".utoc", nameof(outputUtocPath));
+        var outputUtoc = RequireNewFile(outputUtocPath, UtocExtension, nameof(outputUtocPath));
         var outputUcas = Path.ChangeExtension(outputUtoc, ".ucas");
         EnsureMissing(outputUcas);
         EnsureOutsideInput(input, outputUtoc);
@@ -76,7 +77,7 @@ public static class RetocWorkflowService
         cancellationToken.ThrowIfCancellationRequested();
         RetocService.ValidateForOperation("gen-script-objects", options);
         var input = RequireFile(jmapPath, ".jmap", nameof(jmapPath));
-        var outputUtoc = RequireNewFile(outputUtocPath, ".utoc", nameof(outputUtocPath));
+        var outputUtoc = RequireNewFile(outputUtocPath, UtocExtension, nameof(outputUtocPath));
         var version = RetocService.RequireEngineVersion(engineVersion);
         var outputUcas = Path.ChangeExtension(outputUtoc, ".ucas");
         EnsureMissing(outputUcas);
@@ -88,7 +89,7 @@ public static class RetocWorkflowService
     {
         cancellationToken.ThrowIfCancellationRequested();
         RetocService.ValidateForOperation(action, options);
-        var input = RequireFile(utocPath, ".utoc", nameof(utocPath));
+        var input = RequireFile(utocPath, UtocExtension, nameof(utocPath));
         var output = RequireNewDirectory(outputDirectory, nameof(outputDirectory));
         EnsureOutsideInput(input, output);
         return await RunStagedAsync(action, [input], output, [output], options, cancellationToken, outputIsDirectory: true);
@@ -165,7 +166,7 @@ public static class RetocWorkflowService
         var fullPath = Path.GetFullPath(path ?? throw new ArgumentNullException(parameterName));
         if (Directory.Exists(fullPath)) return fullPath;
         if (!File.Exists(fullPath)) throw new FileNotFoundException($"Input file or directory not found: {fullPath}", fullPath);
-        if (!fullPath.EndsWith(".utoc", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException($"{parameterName} must be a .utoc file or a directory containing .utoc files.", parameterName);
+        if (!fullPath.EndsWith(UtocExtension, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException($"{parameterName} must be a .utoc file or a directory containing .utoc files.", parameterName);
         return fullPath;
     }
 

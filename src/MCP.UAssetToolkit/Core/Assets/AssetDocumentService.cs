@@ -16,12 +16,16 @@ public static class AssetDocumentService
 {
     public const int DefaultMaxJsonChars = 65_536;
     public const int MaximumMaxJsonChars = 1_000_000;
+    private const string AddOperation = "add";
+    private const string RemoveOperation = "remove";
+    private const string ReplaceOperation = "replace";
+    private const string TypeMetadataProperty = "$type";
 
     // These values carry process/session context rather than package data. They must be
     // restored even if an older UAssetAPI version includes them in its JSON output.
     private static readonly HashSet<string> ProtectedRootMembers = new(StringComparer.Ordinal)
     {
-        "$type", "FilePath", "Mappings", "CustomSerializationFlags", "GameSpecificOverride", "MapStructTypeOverride", "ArrayStructTypeOverride",
+        TypeMetadataProperty, "FilePath", "Mappings", "CustomSerializationFlags", "GameSpecificOverride", "MapStructTypeOverride", "ArrayStructTypeOverride",
         "UseSeparateBulkDataFiles", "OverrideNameMapHashes"
     };
 
@@ -47,25 +51,7 @@ public static class AssetDocumentService
         {
             var session = AssetSessionService.GetOrLoadSession(filePath);
             var originalRoot = ParseSerializedAsset(session.Asset);
-            var candidateRoot = originalRoot.DeepClone();
-            foreach (var edit in edits)
-            {
-                if (edit.Operation == "test")
-                {
-                    if (!JsonNode.DeepEquals(Resolve(candidateRoot, edit.Tokens, edit.Pointer), edit.Value))
-                        throw new InvalidOperationException($"Test failed at JSON pointer '{edit.Pointer}'. No edits were applied.");
-                    continue;
-                }
-
-                if (edit.Operation is "copy" or "move")
-                {
-                    var value = Resolve(candidateRoot, edit.FromTokens!, edit.From!)?.DeepClone();
-                    if (edit.Operation == "move")
-                        candidateRoot = Apply(candidateRoot, edit.FromTokens!, edit.From!, "remove", null);
-                    candidateRoot = Apply(candidateRoot, edit.Tokens, edit.Pointer, "add", value);
-                }
-                else candidateRoot = Apply(candidateRoot, edit.Tokens, edit.Pointer, edit.Operation, edit.Value);
-            }
+            var candidateRoot = ApplyBatchEdits(originalRoot, edits);
 
             if (candidateRoot is not JsonObject)
                 throw new InvalidOperationException("The document root must remain a UAsset JSON object.");
@@ -74,19 +60,51 @@ public static class AssetDocumentService
             var changed = !JsonNode.DeepEquals(originalRoot, candidateRoot);
             if (changed)
             {
-                // Normalize a separate baseline because writing recalculates header offsets.
-                // Compare untouched package data against that baseline, not a stale header.
-                var baseline = ParseSerializedAsset(UAssetContext.PrepareForWrite(UAssetContext.Clone(session.Asset)));
-                var candidate = UAsset.DeserializeJson(candidateRoot.ToJsonString());
-                UAssetContext.Copy(session.Asset, candidate);
-                candidate = UAssetContext.PrepareForWrite(candidate);
-                var canonical = ParseSerializedAsset(candidate);
-                VerifyBatchChanges(originalRoot, candidateRoot, canonical, "");
-                VerifyPreservedBranches(originalRoot, candidateRoot, baseline, canonical, "");
+                var candidate = PrepareAndVerifyBatchCandidate(session.Asset, originalRoot, candidateRoot);
                 if (!preview) AssetSessionService.TransformSessionAsset(filePath, _ => candidate);
             }
             return new DocumentBatch(session.FilePath, edits.Length, preview, changed, candidateRoot.ToJsonString().Length);
         });
+    }
+
+    private static JsonNode ApplyBatchEdits(JsonNode originalRoot, IEnumerable<ParsedEdit> edits)
+    {
+        var candidateRoot = originalRoot.DeepClone();
+        foreach (var edit in edits) candidateRoot = ApplyEdit(candidateRoot, edit);
+        return candidateRoot;
+    }
+
+    private static JsonNode ApplyEdit(JsonNode candidateRoot, ParsedEdit edit)
+    {
+        if (edit.Operation == "test")
+        {
+            if (!JsonNode.DeepEquals(Resolve(candidateRoot, edit.Tokens, edit.Pointer), edit.Value))
+                throw new InvalidOperationException($"Test failed at JSON pointer '{edit.Pointer}'. No edits were applied.");
+            return candidateRoot;
+        }
+
+        if (edit.Operation is not ("copy" or "move"))
+            return Apply(candidateRoot, edit.Tokens, edit.Pointer, edit.Operation, edit.Value);
+
+        var fromTokens = edit.FromTokens!;
+        var from = edit.From!;
+        var value = Resolve(candidateRoot, fromTokens, from)?.DeepClone();
+        if (edit.Operation == "move") candidateRoot = Apply(candidateRoot, fromTokens, from, RemoveOperation, null);
+        return Apply(candidateRoot, edit.Tokens, edit.Pointer, AddOperation, value);
+    }
+
+    private static UAsset PrepareAndVerifyBatchCandidate(UAsset originalAsset, JsonNode originalRoot, JsonNode candidateRoot)
+    {
+        // Normalize a separate baseline because writing recalculates header offsets.
+        // Compare untouched package data against that baseline, not a stale header.
+        var baseline = ParseSerializedAsset(UAssetContext.PrepareForWrite(UAssetContext.Clone(originalAsset)));
+        var candidate = UAsset.DeserializeJson(candidateRoot.ToJsonString());
+        UAssetContext.Copy(originalAsset, candidate);
+        candidate = UAssetContext.PrepareForWrite(candidate);
+        var canonical = ParseSerializedAsset(candidate);
+        VerifyBatchChanges(originalRoot, candidateRoot, canonical, "");
+        VerifyPreservedBranches(originalRoot, candidateRoot, baseline, canonical, "");
+        return candidate;
     }
 
     private sealed record ParsedEdit(string Pointer, string Operation, string[] Tokens, JsonNode? Value, string? From, string[]? FromTokens);
@@ -97,40 +115,64 @@ public static class AssetDocumentService
         if (operations.Count is < 1 or > MaximumBatchOperations)
             throw new ArgumentOutOfRangeException(nameof(operations), $"Supply between 1 and {MaximumBatchOperations} operations.");
         long inputCharacters = 0;
-        return operations.Select(edit =>
+        var edits = new ParsedEdit[operations.Count];
+        for (var index = 0; index < operations.Count; index++)
+            edits[index] = ParseEdit(operations[index], ref inputCharacters);
+        return edits;
+    }
+
+    private static ParsedEdit ParseEdit(AssetDocumentEdit edit, ref long inputCharacters)
+    {
+        ArgumentNullException.ThrowIfNull(edit);
+        ValidateOperation(edit.Operation);
+        AccumulateInputCharacters(edit, ref inputCharacters);
+        var pointer = edit.Pointer;
+        var tokens = ParsePointer(pointer);
+        if (edit.Operation != "test") EnsurePointerIsWritable(tokens, pointer);
+        return edit.Operation is "copy" or "move"
+            ? ParseCopyOrMoveEdit(edit, pointer, tokens)
+            : ParseValueEdit(edit, pointer, tokens);
+    }
+
+    private static void ValidateOperation(string operation)
+    {
+        if (operation is not (ReplaceOperation or AddOperation or RemoveOperation or "copy" or "move" or "test"))
+            throw new ArgumentException("operation must be replace, add, remove, copy, move, or test.");
+    }
+
+    private static void AccumulateInputCharacters(AssetDocumentEdit edit, ref long inputCharacters)
+    {
+        inputCharacters += (long)(edit.ValueJson?.Length ?? 0) + (edit.Pointer?.Length ?? 0) + (edit.From?.Length ?? 0);
+        if (inputCharacters > MaximumMaxJsonChars) throw new ArgumentException("Batch input exceeds 1000000 characters.");
+    }
+
+    private static ParsedEdit ParseCopyOrMoveEdit(AssetDocumentEdit edit, string pointer, string[] tokens)
+    {
+        if (edit.ValueJson != null || edit.From == null) throw new ArgumentException("copy/move require from and must omit valueJson.");
+        var fromTokens = ParsePointer(edit.From);
+        if (edit.Operation == "move") ValidateMoveSource(tokens, fromTokens, edit.From);
+        return new ParsedEdit(pointer, edit.Operation, tokens, null, edit.From, fromTokens);
+    }
+
+    private static void ValidateMoveSource(IReadOnlyList<string> tokens, string[] fromTokens, string from)
+    {
+        EnsurePointerIsWritable(fromTokens, from);
+        if (fromTokens.Length == 0) throw new InvalidOperationException("Moving the document root is not allowed.");
+        if (tokens.Count > fromTokens.Length && tokens.Take(fromTokens.Length).SequenceEqual(fromTokens))
+            throw new InvalidOperationException("Cannot move a value into its own descendant.");
+    }
+
+    private static ParsedEdit ParseValueEdit(AssetDocumentEdit edit, string pointer, string[] tokens)
+    {
+        if (edit.From != null) throw new ArgumentException("from is only valid for copy/move.");
+        if (edit.Operation == RemoveOperation)
         {
-            ArgumentNullException.ThrowIfNull(edit);
-            if (edit.Operation is not ("replace" or "add" or "remove" or "copy" or "move" or "test"))
-                throw new ArgumentException("operation must be replace, add, remove, copy, move, or test.");
-            inputCharacters += (long)(edit.ValueJson?.Length ?? 0) + (edit.Pointer?.Length ?? 0) + (edit.From?.Length ?? 0);
-            if (inputCharacters > MaximumMaxJsonChars) throw new ArgumentException("Batch input exceeds 1000000 characters.");
-            var tokens = ParsePointer(edit.Pointer!);
-            if (edit.Operation != "test") EnsurePointerIsWritable(tokens, edit.Pointer!);
-            JsonNode? value = null;
-            string[]? fromTokens = null;
-            if (edit.Operation is "copy" or "move")
-            {
-                if (edit.ValueJson != null || edit.From == null) throw new ArgumentException("copy/move require from and must omit valueJson.");
-                fromTokens = ParsePointer(edit.From);
-                if (edit.Operation == "move")
-                {
-                    EnsurePointerIsWritable(fromTokens, edit.From);
-                    if (fromTokens.Length == 0) throw new InvalidOperationException("Moving the document root is not allowed.");
-                    if (tokens.Length > fromTokens.Length && tokens.Take(fromTokens.Length).SequenceEqual(fromTokens))
-                        throw new InvalidOperationException("Cannot move a value into its own descendant.");
-                }
-            }
-            else
-            {
-                if (edit.From != null) throw new ArgumentException("from is only valid for copy/move.");
-                if (edit.Operation == "remove")
-                {
-                    if (edit.ValueJson != null) throw new ArgumentException("valueJson must be omitted for remove.");
-                }
-                else value = ParseJsonValue(edit.ValueJson ?? throw new ArgumentException("valueJson is required for add/replace/test."));
-            }
-            return new ParsedEdit(edit.Pointer!, edit.Operation, tokens, value, edit.From, fromTokens);
-        }).ToArray();
+            if (edit.ValueJson != null) throw new ArgumentException("valueJson must be omitted for remove.");
+            return new ParsedEdit(pointer, edit.Operation, tokens, null, null, null);
+        }
+
+        var value = ParseJsonValue(edit.ValueJson ?? throw new ArgumentException("valueJson is required for add/replace/test."));
+        return new ParsedEdit(pointer, edit.Operation, tokens, value, null, null);
     }
 
     private static void VerifyBatchChanges(JsonNode? original, JsonNode? expected, JsonNode? actual, string pointer)
@@ -138,24 +180,36 @@ public static class AssetDocumentService
         if (JsonNode.DeepEquals(original, expected)) return;
         if (original is JsonObject originalObject && expected is JsonObject expectedObject && actual is JsonObject actualObject)
         {
-            foreach (var entry in expectedObject)
-            {
-                var childPointer = pointer + "/" + entry.Key.Replace("~", "~0").Replace("/", "~1");
-                if (!actualObject.ContainsKey(entry.Key)) throw new InvalidOperationException($"Patched value at '{childPointer}' was not preserved by UAssetAPI.");
-                if (originalObject.ContainsKey(entry.Key)) VerifyBatchChanges(originalObject[entry.Key], entry.Value, actualObject[entry.Key], childPointer);
-                else if (!MatchesRequestedValue(entry.Value, actualObject[entry.Key])) throw new InvalidOperationException($"Patched value at '{childPointer}' was not preserved by UAssetAPI.");
-            }
-            foreach (var key in originalObject.Select(entry => entry.Key).Except(expectedObject.Select(entry => entry.Key), StringComparer.Ordinal))
-                if (actualObject.ContainsKey(key)) throw new InvalidOperationException($"Removal at '{pointer}/{key}' was not preserved by UAssetAPI.");
+            VerifyObjectBatchChanges(originalObject, expectedObject, actualObject, pointer);
             return;
         }
         if (original is JsonArray originalArray && expected is JsonArray expectedArray && actual is JsonArray actualArray && originalArray.Count == expectedArray.Count && expectedArray.Count == actualArray.Count)
         {
-            for (var index = 0; index < expectedArray.Count; index++) VerifyBatchChanges(originalArray[index], expectedArray[index], actualArray[index], $"{pointer}/{index}");
+            VerifyArrayBatchChanges(originalArray, expectedArray, actualArray, pointer);
             return;
         }
         if (!MatchesRequestedValue(expected, actual))
             throw new InvalidOperationException($"Patched value at '{pointer}' was not preserved by UAssetAPI's JSON round-trip.");
+    }
+
+    private static void VerifyObjectBatchChanges(JsonObject original, JsonObject expected, JsonObject actual, string pointer)
+    {
+        foreach (var entry in expected) VerifyObjectEntryChange(original, actual, entry, pointer);
+        var retainedRemoval = original.Where(entry => !expected.ContainsKey(entry.Key)).Select(entry => entry.Key).FirstOrDefault(actual.ContainsKey);
+        if (retainedRemoval != null) throw new InvalidOperationException($"Removal at '{pointer}/{retainedRemoval}' was not preserved by UAssetAPI.");
+    }
+
+    private static void VerifyObjectEntryChange(JsonObject original, JsonObject actual, KeyValuePair<string, JsonNode?> entry, string pointer)
+    {
+        var childPointer = pointer + "/" + entry.Key.Replace("~", "~0").Replace("/", "~1");
+        if (!actual.ContainsKey(entry.Key)) throw new InvalidOperationException($"Patched value at '{childPointer}' was not preserved by UAssetAPI.");
+        if (original.ContainsKey(entry.Key)) VerifyBatchChanges(original[entry.Key], entry.Value, actual[entry.Key], childPointer);
+        else if (!MatchesRequestedValue(entry.Value, actual[entry.Key])) throw new InvalidOperationException($"Patched value at '{childPointer}' was not preserved by UAssetAPI.");
+    }
+
+    private static void VerifyArrayBatchChanges(JsonArray original, JsonArray expected, JsonArray actual, string pointer)
+    {
+        for (var index = 0; index < expected.Count; index++) VerifyBatchChanges(original[index], expected[index], actual[index], $"{pointer}/{index}");
     }
 
     private static void VerifyPreservedBranches(JsonNode? original, JsonNode? expected, JsonNode? baseline, JsonNode? actual, string pointer)
@@ -181,24 +235,39 @@ public static class AssetDocumentService
     private static void VerifyUntouchedValue(JsonNode? expected, JsonNode? actual, string pointer)
     {
         if (JsonNode.DeepEquals(expected, actual) || IsSerializerManagedField(pointer)) return;
-        // New FNames may be registered while serializing edits, but existing indices must stay stable.
-        if (pointer == "/NameMap" && expected is JsonArray names && actual is JsonArray updatedNames
-            && updatedNames.Count >= names.Count && names.Select((name, index) => JsonNode.DeepEquals(name, updatedNames[index])).All(equal => equal)) return;
+        if (IsNameMapPrefix(expected, actual, pointer)) return;
         if (expected is JsonObject expectedObject && actual is JsonObject actualObject && expectedObject.Count == actualObject.Count)
         {
-            foreach (var entry in expectedObject)
-            {
-                if (!actualObject.ContainsKey(entry.Key)) throw new InvalidOperationException($"Batch serialization changed unrelated data at '{pointer}'.");
-                VerifyUntouchedValue(entry.Value, actualObject[entry.Key], pointer + "/" + entry.Key.Replace("~", "~0").Replace("/", "~1"));
-            }
+            VerifyUntouchedObject(expectedObject, actualObject, pointer);
             return;
         }
         if (expected is JsonArray expectedArray && actual is JsonArray actualArray && expectedArray.Count == actualArray.Count)
         {
-            for (var index = 0; index < expectedArray.Count; index++) VerifyUntouchedValue(expectedArray[index], actualArray[index], $"{pointer}/{index}");
+            VerifyUntouchedArray(expectedArray, actualArray, pointer);
             return;
         }
         throw new InvalidOperationException($"Batch serialization changed unrelated data at '{pointer}'.");
+    }
+
+    private static bool IsNameMapPrefix(JsonNode? expected, JsonNode? actual, string pointer)
+    {
+        // New FNames may be registered while serializing edits, but existing indices must stay stable.
+        return pointer == "/NameMap" && expected is JsonArray names && actual is JsonArray updatedNames
+            && updatedNames.Count >= names.Count && names.Select((name, index) => JsonNode.DeepEquals(name, updatedNames[index])).All(equal => equal);
+    }
+
+    private static void VerifyUntouchedObject(JsonObject expected, JsonObject actual, string pointer)
+    {
+        foreach (var entry in expected)
+        {
+            if (!actual.ContainsKey(entry.Key)) throw new InvalidOperationException($"Batch serialization changed unrelated data at '{pointer}'.");
+            VerifyUntouchedValue(entry.Value, actual[entry.Key], pointer + "/" + entry.Key.Replace("~", "~0").Replace("/", "~1"));
+        }
+    }
+
+    private static void VerifyUntouchedArray(JsonArray expected, JsonArray actual, string pointer)
+    {
+        for (var index = 0; index < expected.Count; index++) VerifyUntouchedValue(expected[index], actual[index], $"{pointer}/{index}");
     }
 
     private static bool IsSerializerManagedField(string pointer)
@@ -242,7 +311,7 @@ public static class AssetDocumentService
 
     public static DocumentPatch Patch(string filePath, string pointer, string operation, string? valueJson = null)
     {
-        if (operation is not ("replace" or "add" or "remove"))
+        if (operation is not (ReplaceOperation or AddOperation or RemoveOperation))
         {
             throw new ArgumentException("operation must be 'replace', 'add', or 'remove'.", nameof(operation));
         }
@@ -250,7 +319,7 @@ public static class AssetDocumentService
         var tokens = ParsePointer(pointer);
         EnsurePointerIsWritable(tokens, pointer);
         JsonNode? value = null;
-        if (operation != "remove")
+        if (operation != RemoveOperation)
         {
             if (valueJson is null)
             {
@@ -351,9 +420,9 @@ public static class AssetDocumentService
     private static void EnsurePointerIsWritable(IEnumerable<string> tokens, string pointer)
     {
         var tokenArray = tokens.ToArray();
-        if (tokenArray.Any(token => string.Equals(token, "$type", StringComparison.Ordinal)))
+        if (tokenArray.Any(token => string.Equals(token, TypeMetadataProperty, StringComparison.Ordinal)))
         {
-            throw new InvalidOperationException($"Pointer '{pointer}' addresses protected $type metadata.");
+            throw new InvalidOperationException($"Pointer '{pointer}' addresses protected {TypeMetadataProperty} metadata.");
         }
         if (tokenArray.Length > 0 && ProtectedRootMembers.Contains(tokenArray[0]))
         {
@@ -380,7 +449,7 @@ public static class AssetDocumentService
     {
         if (tokens.Count == 0)
         {
-            if (operation == "remove") throw new InvalidOperationException("Removing the document root is not allowed.");
+            if (operation == RemoveOperation) throw new InvalidOperationException("Removing the document root is not allowed.");
             if (value is not JsonObject replacement) throw new InvalidOperationException("Replacing the document root requires a UAsset JSON object.");
             return replacement.DeepClone();
         }
@@ -405,8 +474,8 @@ public static class AssetDocumentService
 
     private static void ApplyObject(JsonObject obj, string token, string pointer, string operation, JsonNode? value)
     {
-        if (operation == "replace" && !obj.ContainsKey(token)) throw new InvalidOperationException($"JSON pointer '{pointer}' does not exist for replace.");
-        if (operation == "remove")
+        if (operation == ReplaceOperation && !obj.ContainsKey(token)) throw new InvalidOperationException($"JSON pointer '{pointer}' does not exist for replace.");
+        if (operation == RemoveOperation)
         {
             if (!obj.Remove(token)) throw new InvalidOperationException($"JSON pointer '{pointer}' does not exist for remove.");
         }
@@ -422,7 +491,7 @@ public static class AssetDocumentService
         }
         var index = ParseArrayIndex(token, array.Count, operation == "add", pointer);
         if (operation == "add") array.Insert(index, value?.DeepClone());
-        else if (operation == "replace") array[index] = value?.DeepClone();
+        else if (operation == ReplaceOperation) array[index] = value?.DeepClone();
         else array.RemoveAt(index);
     }
 
@@ -442,7 +511,7 @@ public static class AssetDocumentService
         allowed.UnionWith(IntroducibleTypeNames);
         if (TypeNames(candidate).Any(typeName => !allowed.Contains(typeName)))
         {
-            throw new InvalidOperationException("Patched JSON introduces a $type value outside the original metadata and UAssetAPI document-type allowlist.");
+            throw new InvalidOperationException($"Patched JSON introduces a {TypeMetadataProperty} value outside the original metadata and UAssetAPI document-type allowlist.");
         }
     }
 
@@ -462,7 +531,7 @@ public static class AssetDocumentService
             effectiveTokens[^1] = (expectedParent.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        if (operation is "add" or "replace")
+        if (operation is AddOperation or ReplaceOperation)
         {
             if (!Contains(expectedRoot, effectiveTokens, pointer) || !Contains(canonicalRoot, effectiveTokens, pointer) ||
                 !MatchesRequestedValue(Resolve(expectedRoot, effectiveTokens, pointer), Resolve(canonicalRoot, effectiveTokens, pointer)))
@@ -526,11 +595,11 @@ public static class AssetDocumentService
         switch (node)
         {
             case JsonObject obj:
-                if (obj.ContainsKey("$type"))
+                if (obj.ContainsKey(TypeMetadataProperty))
                 {
-                    if (obj["$type"] is not JsonValue typeValue || !typeValue.TryGetValue<string>(out var typeName) || string.IsNullOrWhiteSpace(typeName))
+                    if (obj[TypeMetadataProperty] is not JsonValue typeValue || !typeValue.TryGetValue<string>(out var typeName) || string.IsNullOrWhiteSpace(typeName))
                     {
-                        throw new InvalidOperationException("Every $type metadata value must be a non-empty string.");
+                        throw new InvalidOperationException($"Every {TypeMetadataProperty} metadata value must be a non-empty string.");
                     }
                     result.Add(typeName);
                 }

@@ -11,12 +11,13 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class AssetSearchTests
 {
+    private const string AlphaQuery = "alpha";
     [Fact]
     public void Search_PaginatesMatchedCandidatesAndReportsMetadata()
     {
         var result = AssetSearch.Search(
-            new[] { "alpha", "beta", "alphabet", "gamma" },
-            "alpha",
+            new[] { AlphaQuery, "beta", "alphabet", "gamma" },
+            AlphaQuery,
             static value => new[] { value },
             offset: 1,
             limit: 1);
@@ -33,7 +34,7 @@ public sealed class AssetSearchTests
     {
         var result = AssetSearch.Search(
             new[] { "Alpha", "ALPHA" },
-            "alpha",
+            AlphaQuery,
             static value => new[] { value },
             offset: 2,
             limit: 100);
@@ -62,8 +63,8 @@ public sealed class AssetSearchTests
     public void Search_RejectsInvalidPagination(int offset, int limit)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => AssetSearch.Search(
-            new[] { "alpha" },
-            "alpha",
+            new[] { AlphaQuery },
+            AlphaQuery,
             static value => new[] { value },
             offset,
             limit));
@@ -73,7 +74,7 @@ public sealed class AssetSearchTests
     public void Search_RejectsInvalidRegularExpressions()
     {
         Assert.ThrowsAny<ArgumentException>(() => AssetSearch.Search(
-            new[] { "alpha" },
+            new[] { AlphaQuery },
             "[",
             static value => new[] { value },
             useRegex: true));
@@ -83,7 +84,7 @@ public sealed class AssetSearchTests
     public async Task SearchNameMapAsync_PaginatesAndPreservesMatchesResponseKey()
     {
         var filePath = Path.Combine(Path.GetTempPath(), $"asset-search-{Guid.NewGuid():N}.uasset");
-        File.WriteAllBytes(filePath, []);
+        await File.WriteAllBytesAsync(filePath, [], TestContext.Current.CancellationToken);
 
         try
         {

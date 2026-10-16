@@ -8,6 +8,8 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class ArchiveTests : IDisposable
 {
+    private const string ReadmeFileName = "readme.txt";
+    private const string PayloadAssetName = "Payload.uasset";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UAssetToolkitArchiveTests", Guid.NewGuid().ToString("N"));
     private readonly List<string> sessions = [];
 
@@ -35,7 +37,7 @@ public sealed class ArchiveTests : IDisposable
     {
         var input = Path.Combine(directory, "input");
         Directory.CreateDirectory(Path.Combine(input, "Game", "Content"));
-        var source = Path.Combine(input, "Game", "Content", "readme.txt");
+        var source = Path.Combine(input, "Game", "Content", ReadmeFileName);
         File.WriteAllText(source, "pak fixture content");
         var pakPath = Path.Combine(directory, "fixture.pak");
 
@@ -43,12 +45,12 @@ public sealed class ArchiveTests : IDisposable
         Assert.Contains("fixture.pak", JsonSerializer.Serialize(created), StringComparison.OrdinalIgnoreCase);
         var session = Open();
         Assert.Single(session.Provider.MountedVfs);
-        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith("readme.txt", StringComparison.OrdinalIgnoreCase));
+        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith(ReadmeFileName, StringComparison.OrdinalIgnoreCase));
         var output = Path.Combine(directory, "extracted");
 
         var extracted = ArchiveService.Extract(session.Id, virtualPath, output);
-        Assert.Contains("readme.txt", JsonSerializer.Serialize(extracted), StringComparison.OrdinalIgnoreCase);
-        var saved = Directory.EnumerateFiles(output, "readme.txt", SearchOption.AllDirectories).Single();
+        Assert.Contains(ReadmeFileName, JsonSerializer.Serialize(extracted), StringComparison.OrdinalIgnoreCase);
+        var saved = Directory.EnumerateFiles(output, ReadmeFileName, SearchOption.AllDirectories).Single();
         Assert.Equal("pak fixture content", File.ReadAllText(saved));
     }
 
@@ -86,10 +88,10 @@ public sealed class ArchiveTests : IDisposable
     [Fact]
     public void Extract_RefusesExistingTargetsWithoutWritingAnything()
     {
-        File.WriteAllBytes(Path.Combine(directory, "Payload.uasset"), [4, 5, 6]);
+        File.WriteAllBytes(Path.Combine(directory, PayloadAssetName), [4, 5, 6]);
         var output = Path.Combine(directory, "output");
         var session = Open();
-        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith("Payload.uasset", StringComparison.OrdinalIgnoreCase));
+        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith(PayloadAssetName, StringComparison.OrdinalIgnoreCase));
         var relative = ArchiveService.SafeRelativePath(virtualPath);
         var existing = ArchiveService.EnsureUnderRoot(output, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(existing)!);
@@ -102,12 +104,12 @@ public sealed class ArchiveTests : IDisposable
     [Fact]
     public void Extract_OverwriteRejectsExistingFileSymlink()
     {
-        File.WriteAllBytes(Path.Combine(directory, "Payload.uasset"), [4, 5, 6]);
+        File.WriteAllBytes(Path.Combine(directory, PayloadAssetName), [4, 5, 6]);
         var output = Path.Combine(directory, "output");
         var outside = Path.Combine(directory, "outside.bin");
         File.WriteAllBytes(outside, [99]);
         var session = Open();
-        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith("Payload.uasset", StringComparison.OrdinalIgnoreCase));
+        var virtualPath = session.Provider.Files.Keys.Single(x => x.EndsWith(PayloadAssetName, StringComparison.OrdinalIgnoreCase));
         var target = ArchiveService.EnsureUnderRoot(output, ArchiveService.SafeRelativePath(virtualPath));
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         try

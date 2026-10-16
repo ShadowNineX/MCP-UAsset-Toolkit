@@ -9,6 +9,7 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class MappingQueryTests : IDisposable
 {
+    private const string SuccessProperty = "success";
     private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "Fixtures", "Test.usmap");
 
     public void Dispose() => MappingService.ClearMappings();
@@ -21,7 +22,7 @@ public sealed class MappingQueryTests : IDisposable
         using var response = JsonDocument.Parse(await MappingQueryTools.ListMappingEnumsAsync(name, FixturePath, offset: 0, limit: 1));
         var data = response.RootElement.GetProperty("data");
 
-        Assert.True(response.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Equal(1, data.GetProperty("count").GetInt32());
         Assert.Contains(data.GetProperty("enums").EnumerateArray().Select(value => value.GetString()), value => value == name);
         Assert.True(data.GetProperty("totalCount").GetInt32() >= 1);
@@ -35,7 +36,7 @@ public sealed class MappingQueryTests : IDisposable
         using var response = JsonDocument.Parse(await MappingQueryTools.GetMappingEnumAsync(enumName, FixturePath, offset: 0, limit: 1));
         var data = response.RootElement.GetProperty("data");
 
-        Assert.True(response.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Equal(enumName, data.GetProperty("name").GetString());
         Assert.Equal(Math.Min(1, details.TotalCount), data.GetProperty("count").GetInt32());
         Assert.Equal(details.TotalCount, data.GetProperty("totalCount").GetInt32());
@@ -66,11 +67,11 @@ public sealed class MappingQueryTests : IDisposable
     public async Task MappingQueryTools_ReportMissingEnumsAndNoGlobalMappings()
     {
         using var missing = JsonDocument.Parse(await MappingQueryTools.GetMappingEnumAsync("DefinitelyMissing", FixturePath));
-        Assert.False(missing.RootElement.GetProperty("success").GetBoolean());
+        Assert.False(missing.RootElement.GetProperty(SuccessProperty).GetBoolean());
 
         MappingService.ClearMappings();
         using var noGlobal = JsonDocument.Parse(await MappingQueryTools.ListMappingEnumsAsync());
-        Assert.False(noGlobal.RootElement.GetProperty("success").GetBoolean());
+        Assert.False(noGlobal.RootElement.GetProperty(SuccessProperty).GetBoolean());
     }
 
     [Fact]
@@ -95,13 +96,13 @@ public sealed class MappingQueryTests : IDisposable
         Assert.Equal(source.Schemas.Count, fixture.GetProperty("schemaCount").GetInt32());
         Assert.Equal(source.EnumMap.Count, fixture.GetProperty("enumCount").GetInt32());
         var expectedModules = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var schema in source.Schemas.Values) if (!string.IsNullOrWhiteSpace(schema.ModulePath)) expectedModules.Add(schema.ModulePath);
-        foreach (var enumeration in source.EnumMap.Values) if (!string.IsNullOrWhiteSpace(enumeration.ModulePath)) expectedModules.Add(enumeration.ModulePath);
+        expectedModules.UnionWith(source.Schemas.Values.Where(schema => !string.IsNullOrWhiteSpace(schema.ModulePath)).Select(schema => schema.ModulePath));
+        expectedModules.UnionWith(source.EnumMap.Values.Where(enumeration => !string.IsNullOrWhiteSpace(enumeration.ModulePath)).Select(enumeration => enumeration.ModulePath));
         Assert.Equal(expectedModules.Count, fixture.GetProperty("moduleCount").GetInt32());
 
         MappingService.ClearMappings();
         using var noGlobal = JsonDocument.Parse(await MappingQueryTools.GetMappingDiagnosticsAsync());
-        Assert.True(noGlobal.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(noGlobal.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.False(noGlobal.RootElement.GetProperty("data").GetProperty("isLoaded").GetBoolean());
     }
 }

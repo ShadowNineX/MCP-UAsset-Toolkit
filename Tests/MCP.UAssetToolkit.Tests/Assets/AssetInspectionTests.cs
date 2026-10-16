@@ -12,6 +12,8 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public class AssetInspectionTests
 {
+    private const string SuccessProperty = "success";
+    private const string VectorType = "Vector";
     [Fact]
     public void ValidationDoesNotChangeAssetAndDetectsEdits()
     {
@@ -42,12 +44,12 @@ public class AssetInspectionTests
         try
         {
             using var invalid = JsonDocument.Parse(await AssetInspectionTools.SetExportBytesAsync(path, 1, "not base64!"));
-            Assert.False(invalid.RootElement.GetProperty("success").GetBoolean());
+            Assert.False(invalid.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.False(session.IsDirty);
             Assert.Equal(new byte[] { 1, 2, 3 }, ((RawExport)asset.Exports[0]).Data);
 
             using var update = JsonDocument.Parse(await AssetInspectionTools.SetExportBytesAsync(path, 1, "BAUGBw=="));
-            Assert.True(update.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(update.RootElement.GetProperty(SuccessProperty).GetBoolean());
             using var read = JsonDocument.Parse(await AssetInspectionTools.GetExportBytesAsync(path, 1, offset: 1, limit: 2));
             Assert.Equal("BQY=", read.RootElement.GetProperty("data").GetProperty("base64").GetString());
             Assert.True(read.RootElement.GetProperty("data").GetProperty("hasMore").GetBoolean());
@@ -65,14 +67,14 @@ public class AssetInspectionTests
         try
         {
             using var invalid = JsonDocument.Parse(await AssetInspectionTools.SetExportBytesAsync(path, 1, "AgM=", "script"));
-            Assert.False(invalid.RootElement.GetProperty("success").GetBoolean());
+            Assert.False(invalid.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.Equal(new byte[] { 1 }, script.ScriptBytecodeRaw);
             Assert.Equal(10, script.ScriptBytecodeSize);
             Assert.NotNull(script.ScriptBytecode);
             Assert.False(session.IsDirty);
 
             using var valid = JsonDocument.Parse(await AssetInspectionTools.SetExportBytesAsync(path, 1, "AgM=", "script", 42));
-            Assert.True(valid.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(valid.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.Equal(new byte[] { 2, 3 }, script.ScriptBytecodeRaw);
             Assert.Equal(42, script.ScriptBytecodeSize);
             Assert.Null(script.ScriptBytecode);
@@ -90,13 +92,13 @@ public class AssetInspectionTests
             using var response = JsonDocument.Parse(await SessionTools.OpenAssetAsync(path, new AssetLoadOptions
             {
                 EngineVersion = "4.27",
-                MapStructTypes = new() { ["ExampleMap"] = ["Vector", "Guid"] },
-                ArrayStructTypes = new() { ["ExampleArray"] = "Vector" }
+                MapStructTypes = new() { ["ExampleMap"] = [VectorType, "Guid"] },
+                ArrayStructTypes = new() { ["ExampleArray"] = VectorType }
             }));
-            Assert.True(response.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
             var reloaded = AssetSessionService.ReloadSession(path);
-            Assert.Equal("Vector", reloaded.Asset.MapStructTypeOverride["ExampleMap"].Item1.Value);
-            Assert.Equal("Vector", reloaded.Asset.ArrayStructTypeOverride["ExampleArray"].Value);
+            Assert.Equal(VectorType, reloaded.Asset.MapStructTypeOverride["ExampleMap"].Item1.Value);
+            Assert.Equal(VectorType, reloaded.Asset.ArrayStructTypeOverride["ExampleArray"].Value);
         }
         finally { AssetSessionService.CloseSession(path, discardChanges: true); }
     }
@@ -109,26 +111,26 @@ public class AssetInspectionTests
         Directory.CreateDirectory(directory);
         try
         {
-            var before = File.ReadAllBytes(source);
+            var before = await File.ReadAllBytesAsync(source, TestContext.Current.CancellationToken);
             using var list = JsonDocument.Parse(await MappingInspectionTools.ListMappingSchemasAsync(mappingsPath: source, limit: 1));
-            Assert.True(list.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(list.RootElement.GetProperty(SuccessProperty).GetBoolean());
             var name = list.RootElement.GetProperty("data").GetProperty("schemas")[0].GetString()!;
             using var schema = JsonDocument.Parse(await MappingInspectionTools.GetMappingSchemaAsync(name, source));
-            Assert.True(schema.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(schema.RootElement.GetProperty(SuccessProperty).GetBoolean());
 
             var jmap = Path.Combine(directory, "export.json");
             using var export = JsonDocument.Parse(await MappingInspectionTools.ExportMappingsJsonAsync(jmap, source));
-            Assert.True(export.RootElement.GetProperty("success").GetBoolean(), export.RootElement.ToString());
-            using var exportedJson = JsonDocument.Parse(File.ReadAllText(jmap));
+            Assert.True(export.RootElement.GetProperty(SuccessProperty).GetBoolean(), export.RootElement.ToString());
+            using var exportedJson = JsonDocument.Parse(await File.ReadAllTextAsync(jmap, TestContext.Current.CancellationToken));
             Assert.True(exportedJson.RootElement.GetProperty("Schemas").EnumerateObject().Any());
             using var second = JsonDocument.Parse(await MappingInspectionTools.ExportMappingsJsonAsync(jmap, source));
-            Assert.False(second.RootElement.GetProperty("success").GetBoolean());
+            Assert.False(second.RootElement.GetProperty(SuccessProperty).GetBoolean());
 
             var target = Path.Combine(directory, "patched.usmap");
             using var patch = JsonDocument.Parse(await MappingInspectionTools.PatchMappingsVersionAsync(source, target, "5.4"));
-            Assert.True(patch.RootElement.GetProperty("success").GetBoolean());
+            Assert.True(patch.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.True(new UAssetAPI.Unversioned.Usmap(target).Schemas.Count > 0);
-            Assert.Equal(before, File.ReadAllBytes(source));
+            Assert.Equal(before, await File.ReadAllBytesAsync(source, TestContext.Current.CancellationToken));
         }
         finally
         {

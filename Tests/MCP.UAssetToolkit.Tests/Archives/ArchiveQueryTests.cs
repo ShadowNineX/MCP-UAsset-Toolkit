@@ -8,6 +8,11 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class ArchiveQueryTests : IDisposable
 {
+    private const string ObjectsProperty = "objects";
+    private const string ReadShaderMapsProperty = "readShaderMaps";
+    private const string ReadScriptDataProperty = "readScriptData";
+    private const string ReadNaniteDataProperty = "readNaniteData";
+    private const string SkipReferencedTexturesProperty = "skipReferencedTextures";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UAssetToolkitArchiveQueryTests", Guid.NewGuid().ToString("N"));
     private readonly List<string> sessions = [];
 
@@ -23,7 +28,7 @@ public sealed class ArchiveQueryTests : IDisposable
         var session = Open();
         var virtualPath = PackagePath(session.Id);
         using var list = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.ListObjects(session.Id, virtualPath)));
-        var objectName = list.RootElement.GetProperty("objects")[0].GetProperty("name").GetString()!;
+        var objectName = list.RootElement.GetProperty(ObjectsProperty)[0].GetProperty("name").GetString()!;
 
         var read = ArchiveQueryService.ReadObject(session.Id, virtualPath, objectName);
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(read));
@@ -44,15 +49,15 @@ public sealed class ArchiveQueryTests : IDisposable
         using var firstPage = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.ListObjects(session.Id, virtualPath, offset: 0, limit: 1)));
 
         Assert.Equal(1, firstPage.RootElement.GetProperty("count").GetInt32());
-        Assert.Equal(1, firstPage.RootElement.GetProperty("objects").GetArrayLength());
+        Assert.Equal(1, firstPage.RootElement.GetProperty(ObjectsProperty).GetArrayLength());
         Assert.True(firstPage.RootElement.GetProperty("totalCount").GetInt32() >= 1);
-        Assert.True(firstPage.RootElement.GetProperty("objects")[0].TryGetProperty("name", out _));
-        Assert.True(firstPage.RootElement.GetProperty("objects")[0].TryGetProperty("className", out _));
+        Assert.True(firstPage.RootElement.GetProperty(ObjectsProperty)[0].TryGetProperty("name", out _));
+        Assert.True(firstPage.RootElement.GetProperty(ObjectsProperty)[0].TryGetProperty("className", out _));
         Assert.Throws<ArgumentOutOfRangeException>(() => ArchiveQueryService.ListObjects(session.Id, virtualPath, limit: 1001));
         Assert.Throws<ArgumentOutOfRangeException>(() => ArchiveQueryService.ListObjects(session.Id, virtualPath, limit: 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => ArchiveQueryService.ListObjects(session.Id, virtualPath, offset: -1));
 
-        var objectName = firstPage.RootElement.GetProperty("objects")[0].GetProperty("name").GetString()!;
+        var objectName = firstPage.RootElement.GetProperty(ObjectsProperty)[0].GetProperty("name").GetString()!;
         using var bounded = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.ReadObject(session.Id, virtualPath, objectName, maxJsonCharacters: 1)));
         Assert.True(bounded.RootElement.GetProperty("truncated").GetBoolean());
         Assert.False(bounded.RootElement.TryGetProperty("json", out _));
@@ -91,23 +96,23 @@ public sealed class ArchiveQueryTests : IDisposable
         var first = Open();
         var second = Open();
         using var before = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(first.Id)));
-        var originalShaderMaps = before.RootElement.GetProperty("readShaderMaps").GetBoolean();
+        var originalShaderMaps = before.RootElement.GetProperty(ReadShaderMapsProperty).GetBoolean();
         using var secondDefaults = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(second.Id)));
 
         ArchiveQueryService.ConfigureReadOptions(first.Id, readShaderMaps: !originalShaderMaps);
         using var configured = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(first.Id)));
-        Assert.Equal(!originalShaderMaps, configured.RootElement.GetProperty("readShaderMaps").GetBoolean());
-        Assert.Equal(before.RootElement.GetProperty("readScriptData").GetBoolean(), configured.RootElement.GetProperty("readScriptData").GetBoolean());
+        Assert.Equal(!originalShaderMaps, configured.RootElement.GetProperty(ReadShaderMapsProperty).GetBoolean());
+        Assert.Equal(before.RootElement.GetProperty(ReadScriptDataProperty).GetBoolean(), configured.RootElement.GetProperty(ReadScriptDataProperty).GetBoolean());
         using var secondCurrent = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(second.Id)));
-        Assert.Equal(secondDefaults.RootElement.GetProperty("readShaderMaps").GetBoolean(), secondCurrent.RootElement.GetProperty("readShaderMaps").GetBoolean());
-        Assert.Equal(secondDefaults.RootElement.GetProperty("readScriptData").GetBoolean(), secondCurrent.RootElement.GetProperty("readScriptData").GetBoolean());
-        Assert.Equal(secondDefaults.RootElement.GetProperty("readNaniteData").GetBoolean(), secondCurrent.RootElement.GetProperty("readNaniteData").GetBoolean());
-        Assert.Equal(secondDefaults.RootElement.GetProperty("skipReferencedTextures").GetBoolean(), secondCurrent.RootElement.GetProperty("skipReferencedTextures").GetBoolean());
+        Assert.Equal(secondDefaults.RootElement.GetProperty(ReadShaderMapsProperty).GetBoolean(), secondCurrent.RootElement.GetProperty(ReadShaderMapsProperty).GetBoolean());
+        Assert.Equal(secondDefaults.RootElement.GetProperty(ReadScriptDataProperty).GetBoolean(), secondCurrent.RootElement.GetProperty(ReadScriptDataProperty).GetBoolean());
+        Assert.Equal(secondDefaults.RootElement.GetProperty(ReadNaniteDataProperty).GetBoolean(), secondCurrent.RootElement.GetProperty(ReadNaniteDataProperty).GetBoolean());
+        Assert.Equal(secondDefaults.RootElement.GetProperty(SkipReferencedTexturesProperty).GetBoolean(), secondCurrent.RootElement.GetProperty(SkipReferencedTexturesProperty).GetBoolean());
         Assert.Equal(secondDefaults.RootElement.GetProperty("useLazyPackageSerialization").GetBoolean(), secondCurrent.RootElement.GetProperty("useLazyPackageSerialization").GetBoolean());
 
         ArchiveQueryService.ConfigureReadOptions(first.Id);
         using var unchanged = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(first.Id)));
-        Assert.Equal(!originalShaderMaps, unchanged.RootElement.GetProperty("readShaderMaps").GetBoolean());
+        Assert.Equal(!originalShaderMaps, unchanged.RootElement.GetProperty(ReadShaderMapsProperty).GetBoolean());
         Assert.Throws<KeyNotFoundException>(() => ArchiveQueryService.GetReadOptions("missing"));
     }
 
@@ -123,9 +128,9 @@ public sealed class ArchiveQueryTests : IDisposable
     }
 
     [Theory]
-    [InlineData("readScriptData")]
-    [InlineData("readNaniteData")]
-    [InlineData("skipReferencedTextures")]
+    [InlineData(ReadScriptDataProperty)]
+    [InlineData(ReadNaniteDataProperty)]
+    [InlineData(SkipReferencedTexturesProperty)]
     [InlineData("useLazyPackageSerialization")]
     public void EachAdditionalReadOptionChangesOnlyItsSelectedProvider(string property)
     {
@@ -136,14 +141,14 @@ public sealed class ArchiveQueryTests : IDisposable
         var value = !before.RootElement.GetProperty(property).GetBoolean();
         _ = property switch
         {
-            "readScriptData" => ArchiveQueryService.ConfigureReadOptions(first.Id, readScriptData: value),
-            "readNaniteData" => ArchiveQueryService.ConfigureReadOptions(first.Id, readNaniteData: value),
-            "skipReferencedTextures" => ArchiveQueryService.ConfigureReadOptions(first.Id, skipReferencedTextures: value),
+            ReadScriptDataProperty => ArchiveQueryService.ConfigureReadOptions(first.Id, readScriptData: value),
+            ReadNaniteDataProperty => ArchiveQueryService.ConfigureReadOptions(first.Id, readNaniteData: value),
+            SkipReferencedTexturesProperty => ArchiveQueryService.ConfigureReadOptions(first.Id, skipReferencedTextures: value),
             _ => ArchiveQueryService.ConfigureReadOptions(first.Id, useLazyPackageSerialization: value)
         };
         using var after = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(first.Id)));
         using var secondAfter = JsonDocument.Parse(JsonSerializer.Serialize(ArchiveQueryService.GetReadOptions(second.Id)));
-        foreach (var option in new[] { "readScriptData", "readShaderMaps", "readNaniteData", "skipReferencedTextures", "useLazyPackageSerialization" })
+        foreach (var option in new[] { ReadScriptDataProperty, ReadShaderMapsProperty, ReadNaniteDataProperty, SkipReferencedTexturesProperty, "useLazyPackageSerialization" })
         {
             Assert.Equal(option == property ? value : before.RootElement.GetProperty(option).GetBoolean(), after.RootElement.GetProperty(option).GetBoolean());
             Assert.Equal(secondBefore.RootElement.GetProperty(option).GetBoolean(), secondAfter.RootElement.GetProperty(option).GetBoolean());

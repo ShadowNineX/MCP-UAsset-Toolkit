@@ -12,6 +12,8 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class AssetDocumentTests : IDisposable
 {
+    private const string FolderNamePointer = "/FolderName";
+    private const string ReplaceOperation = "replace";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UAssetToolkitDocumentTests", Guid.NewGuid().ToString("N"));
     private string AssetPath => Path.Combine(directory, "TestSoundClass.uasset");
 
@@ -52,7 +54,7 @@ public sealed class AssetDocumentTests : IDisposable
         var nameMapHashes = session.Asset.OverrideNameMapHashes;
         session.Asset.UseSeparateBulkDataFiles = true;
 
-        AssetDocumentService.Patch(AssetPath, "/FolderName", "replace", "\"DocumentPatched\"");
+        AssetDocumentService.Patch(AssetPath, FolderNamePointer, ReplaceOperation, "\"DocumentPatched\"");
 
         Assert.True(session.IsDirty);
         Assert.Equal("DocumentPatched", session.Asset.FolderName.Value);
@@ -73,12 +75,12 @@ public sealed class AssetDocumentTests : IDisposable
         var original = session.Asset;
         var folder = session.Asset.FolderName.Value;
 
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.Patch(AssetPath, "/FolderName", "replace", "not json"));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.Patch(AssetPath, FolderNamePointer, ReplaceOperation, "not json"));
         Assert.Same(original, session.Asset);
         Assert.Equal(folder, session.Asset.FolderName.Value);
         Assert.False(session.IsDirty);
 
-        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/missing", "replace", "1"));
+        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/missing", ReplaceOperation, "1"));
         Assert.Same(original, session.Asset);
         Assert.False(session.IsDirty);
     }
@@ -89,8 +91,8 @@ public sealed class AssetDocumentTests : IDisposable
         var session = LoadFixture();
         var original = session.Asset;
 
-        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/$type", "replace", "\"System.String, System.Private.CoreLib\""));
-        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/FilePath", "replace", "\"C:/elsewhere.uasset\""));
+        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/$type", ReplaceOperation, "\"System.String, System.Private.CoreLib\""));
+        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/FilePath", ReplaceOperation, "\"C:/elsewhere.uasset\""));
 
         Assert.Same(original, session.Asset);
         Assert.False(session.IsDirty);
@@ -103,10 +105,10 @@ public sealed class AssetDocumentTests : IDisposable
         var original = session.Asset;
 
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/Typo", "add", "1"));
-        Assert.ThrowsAny<Exception>(() => AssetDocumentService.Patch(AssetPath, "/Exports", "replace", "null"));
+        Assert.ThrowsAny<Exception>(() => AssetDocumentService.Patch(AssetPath, "/Exports", ReplaceOperation, "null"));
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/Typo", "add", "{\"$type\":1}"));
         Assert.Throws<ArgumentException>(() => AssetDocumentService.Read(AssetPath, "/Exports/~2"));
-        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/Exports/+1", "replace", "null"));
+        Assert.Throws<InvalidOperationException>(() => AssetDocumentService.Patch(AssetPath, "/Exports/+1", ReplaceOperation, "null"));
 
         Assert.Same(original, session.Asset);
         Assert.False(session.IsDirty);
@@ -138,11 +140,11 @@ public sealed class AssetDocumentTests : IDisposable
     {
         LoadFixture();
 
-        using var read = JsonDocument.Parse(await AssetDocumentTools.ReadAssetDocumentAsync(AssetPath, "/FolderName"));
+        using var read = JsonDocument.Parse(await AssetDocumentTools.ReadAssetDocumentAsync(AssetPath, FolderNamePointer));
         Assert.True(read.RootElement.GetProperty("success").GetBoolean());
-        Assert.Equal("/FolderName", read.RootElement.GetProperty("data").GetProperty("pointer").GetString());
+        Assert.Equal(FolderNamePointer, read.RootElement.GetProperty("data").GetProperty("pointer").GetString());
 
-        using var patch = JsonDocument.Parse(await AssetDocumentTools.PatchAssetDocumentAsync(AssetPath, "/FolderName", "replace", "\"ToolPatched\""));
+        using var patch = JsonDocument.Parse(await AssetDocumentTools.PatchAssetDocumentAsync(AssetPath, FolderNamePointer, ReplaceOperation, "\"ToolPatched\""));
         Assert.True(patch.RootElement.GetProperty("success").GetBoolean());
         Assert.Equal("ToolPatched", AssetSessionService.GetSession(AssetPath)!.Asset.FolderName.Value);
     }

@@ -21,16 +21,22 @@ public static class AssetBatchService
     {
         return AssetSessionService.ExecuteOperation(() =>
         {
-            var target = Path.GetFullPath(targetFilePath);
-            if (File.Exists(target) || Directory.Exists(target) || AssetSessionService.GetSession(target) != null)
-                throw new IOException("Target already exists on disk or in the session cache; choose a new path.");
-            if (!Path.GetExtension(target).Equals(".uasset", StringComparison.OrdinalIgnoreCase) && !Path.GetExtension(target).Equals(".umap", StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("Target must have a .uasset or .umap extension.", nameof(targetFilePath));
+            var target = ValidateCloneTarget(targetFilePath);
             var source = AssetSessionService.GetOrLoadSession(filePath);
             var candidate = UAssetContext.PrepareForWrite(UAssetContext.Clone(source.Asset));
             candidate.FilePath = target;
             return AssetSessionService.RegisterSession(target, candidate, source.EngineVersion, source.MappingsPath, isDirty: true);
         });
+    }
+
+    private static string ValidateCloneTarget(string targetFilePath)
+    {
+        var target = Path.GetFullPath(targetFilePath);
+        if (File.Exists(target) || Directory.Exists(target) || AssetSessionService.GetSession(target) != null)
+            throw new IOException("Target already exists on disk or in the session cache; choose a new path.");
+        if (!Path.GetExtension(target).Equals(".uasset", StringComparison.OrdinalIgnoreCase) && !Path.GetExtension(target).Equals(".umap", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Target must have a .uasset or .umap extension.", nameof(targetFilePath));
+        return target;
     }
 
     private static IReadOnlyList<Item> Execute(IReadOnlyList<string> filePaths, Func<string, object> operation)

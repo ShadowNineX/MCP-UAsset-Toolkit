@@ -7,7 +7,10 @@ namespace MCP_UAsset_Toolkit.Source.Services;
 
 public static class RetocService
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "S1075", Justification = "This canonical upstream documentation link is returned to clients; it is not a configurable service endpoint or a filesystem path.")]
     public const string ReleasesUrl = "https://github.com/trumank/retoc/releases";
+    private const string ToLegacyAction = "to-legacy";
+    private const string ToZenAction = "to-zen";
     private const int OutputLimit = 64 * 1024;
     private static readonly TimeSpan StopWaitTimeout = TimeSpan.FromSeconds(5);
     private static readonly HashSet<string> InspectActions = new(StringComparer.Ordinal) { "info", "list", "verify" };
@@ -40,7 +43,7 @@ public static class RetocService
     public static async Task<RetocConversionResult> ConvertToLegacyAsync(string inputPath, string outputPakPath, RetocOptions? options, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ValidateForOperation("to-legacy", options);
+        ValidateForOperation(ToLegacyAction, options);
         var input = RequireInput(inputPath, ".utoc");
         var output = RequireOutput(outputPakPath, ".pak", "outputPakPath");
         EnsureDoesNotOverlapInput(input, output);
@@ -50,10 +53,10 @@ public static class RetocService
 
         try
         {
-            var arguments = BuildArguments(options, "to-legacy", input, stagedOutput);
+            var arguments = BuildArguments(options, ToLegacyAction, input, stagedOutput);
             AddLegacyOptions(arguments, options);
             var result = await RunAsync(options?.RetocPath, arguments, options?.AesKey, ValidateTimeout(options), cancellationToken);
-            EnsureSuccess(result, "to-legacy", stage);
+            EnsureSuccess(result, ToLegacyAction, stage);
             if (options?.DryRun == true)
             {
                 TryDeleteStage(stage);
@@ -79,7 +82,7 @@ public static class RetocService
     public static async Task<RetocConversionResult> ConvertToZenAsync(string inputPath, string outputUtocPath, string engineVersion, RetocOptions? options, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ValidateForOperation("to-zen", options);
+        ValidateForOperation(ToZenAction, options);
         var input = RequireInput(inputPath, ".pak");
         var outputUtoc = RequireOutput(outputUtocPath, ".utoc", "outputUtocPath");
         var version = RequireEngineVersion(engineVersion);
@@ -96,12 +99,12 @@ public static class RetocService
 
         try
         {
-            var arguments = BuildArguments(options, "to-zen", input, stagedUtoc);
+            var arguments = BuildArguments(options, ToZenAction, input, stagedUtoc);
             AddFilters(arguments, options);
             arguments.Add("--version");
             arguments.Add(version);
             var result = await RunAsync(options?.RetocPath, arguments, options?.AesKey, ValidateTimeout(options), cancellationToken);
-            EnsureSuccess(result, "to-zen", stage);
+            EnsureSuccess(result, ToZenAction, stage);
             EnsureExpectedFiles([stagedUtoc, stagedUcas, stagedPak]);
             cancellationToken.ThrowIfCancellationRequested();
             Publish([new FileTransfer(stagedUtoc, outputUtoc), new FileTransfer(stagedUcas, outputUcas), new FileTransfer(stagedPak, outputPak)]);
@@ -336,8 +339,8 @@ public static class RetocService
         var hasListOptions = options.ListAll || options.ListHash || options.ListPackage || options.ListSize || options.ListPath || options.ListStore;
         if (hasListOptions && action != "list") throw new ArgumentException("List display options are only supported for inspect_iostore action=list.");
         var hasLegacyOnlyOptions = options.NoAssets || options.NoShaders || options.NoScriptObjects || options.NoCompressShaders || options.DryRun || !string.IsNullOrWhiteSpace(options.LegacyEngineVersion);
-        if (hasLegacyOnlyOptions && action != "to-legacy") throw new ArgumentException("Legacy conversion options are only supported by convert_to_legacy.");
-        if (options.Filters?.Count > 0 && action is not "to-legacy" and not "to-zen") throw new ArgumentException("Filters are only supported by conversion tools.");
+        if (hasLegacyOnlyOptions && action != ToLegacyAction) throw new ArgumentException("Legacy conversion options are only supported by convert_to_legacy.");
+        if (options.Filters?.Count > 0 && action is not ToLegacyAction and not ToZenAction) throw new ArgumentException("Filters are only supported by conversion tools.");
     }
     internal static int ValidateTimeout(RetocOptions? options) { ValidateOptions(options); return options?.TimeoutSeconds ?? 300; }
     internal static string RequireEngineVersion(string engineVersion)

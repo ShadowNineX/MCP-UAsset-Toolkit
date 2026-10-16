@@ -27,6 +27,8 @@ public sealed record AssetDependencyPage(
 /// <summary>Builds a read-only view of package references stored in an asset's headers.</summary>
 public static class AssetDependencyService
 {
+    private const string ExportHeaderCategory = "exportHeader";
+
     public static AssetDependencyPage GetDependencies(AssetSession session, int? exportIndex = null, int offset = 0, int limit = 100)
     {
         ArgumentNullException.ThrowIfNull(session);
@@ -38,42 +40,52 @@ public static class AssetDependencyService
             throw new ArgumentOutOfRangeException(nameof(exportIndex), exportIndex, $"Export index must be between 1 and {asset.Exports.Count}.");
 
         var result = new List<AssetDependency>();
-        var exportIndexes = exportIndex is null ? Enumerable.Range(1, asset.Exports.Count) : [exportIndex.Value];
-        foreach (var oneBasedIndex in exportIndexes)
-        {
-            var export = asset.Exports[oneBasedIndex - 1];
-            AddPackageIndex(result, asset, "exportHeader", oneBasedIndex, "outerIndex", export.OuterIndex);
-            AddPackageIndex(result, asset, "exportHeader", oneBasedIndex, "classIndex", export.ClassIndex);
-            AddPackageIndex(result, asset, "exportHeader", oneBasedIndex, "superIndex", export.SuperIndex);
-            AddPackageIndex(result, asset, "exportHeader", oneBasedIndex, "templateIndex", export.TemplateIndex);
-
-            AddPackageIndexes(result, asset, "serializationBeforeSerialization", oneBasedIndex, export.SerializationBeforeSerializationDependencies);
-            AddPackageIndexes(result, asset, "createBeforeSerialization", oneBasedIndex, export.CreateBeforeSerializationDependencies);
-            AddPackageIndexes(result, asset, "serializationBeforeCreate", oneBasedIndex, export.SerializationBeforeCreateDependencies);
-            AddPackageIndexes(result, asset, "createBeforeCreate", oneBasedIndex, export.CreateBeforeCreateDependencies);
-
-            if (asset.DependsMap is not null && oneBasedIndex - 1 < asset.DependsMap.Count)
-            {
-                foreach (var rawIndex in asset.DependsMap[oneBasedIndex - 1] ?? [])
-                    AddPackageIndex(result, asset, "dependsMap", oneBasedIndex, null, new FPackageIndex(rawIndex));
-            }
-        }
-
-        if (exportIndex is null)
-        {
-            foreach (var (import, index) in asset.Imports.Select((value, index) => (value, index + 1)))
-                AddPackageIndex(result, asset, "importHeader", null, $"import[{index}].outerIndex", import.OuterIndex);
-
-            foreach (var package in asset.SoftPackageReferenceList ?? [])
-                result.Add(new AssetDependency("softPackageReference", null, null, null, "softPackage", null, package?.ToString(), null));
-
-            foreach (var dependency in asset.ExtraPackageDependencies ?? [])
-                result.Add(new AssetDependency("extraPackageDependency", null, null, null, "package", null, dependency.Key?.ToString(), null, dependency.Value));
-        }
+        AddExportDependencies(result, asset, exportIndex);
+        if (exportIndex is null) AddPackageDependencies(result, asset);
 
         var totalCount = result.Count;
         var page = result.Skip(offset).Take(limit).ToList();
         return new AssetDependencyPage(page, totalCount, offset, limit, offset + page.Count < totalCount);
+    }
+
+    private static void AddExportDependencies(List<AssetDependency> result, UAsset asset, int? exportIndex)
+    {
+        var exportIndexes = exportIndex is null ? Enumerable.Range(1, asset.Exports.Count) : [exportIndex.Value];
+        foreach (var oneBasedIndex in exportIndexes) AddExportDependencies(result, asset, oneBasedIndex);
+    }
+
+    private static void AddExportDependencies(List<AssetDependency> result, UAsset asset, int oneBasedIndex)
+    {
+        var export = asset.Exports[oneBasedIndex - 1];
+        AddPackageIndex(result, asset, ExportHeaderCategory, oneBasedIndex, "outerIndex", export.OuterIndex);
+        AddPackageIndex(result, asset, ExportHeaderCategory, oneBasedIndex, "classIndex", export.ClassIndex);
+        AddPackageIndex(result, asset, ExportHeaderCategory, oneBasedIndex, "superIndex", export.SuperIndex);
+        AddPackageIndex(result, asset, ExportHeaderCategory, oneBasedIndex, "templateIndex", export.TemplateIndex);
+
+        AddPackageIndexes(result, asset, "serializationBeforeSerialization", oneBasedIndex, export.SerializationBeforeSerializationDependencies);
+        AddPackageIndexes(result, asset, "createBeforeSerialization", oneBasedIndex, export.CreateBeforeSerializationDependencies);
+        AddPackageIndexes(result, asset, "serializationBeforeCreate", oneBasedIndex, export.SerializationBeforeCreateDependencies);
+        AddPackageIndexes(result, asset, "createBeforeCreate", oneBasedIndex, export.CreateBeforeCreateDependencies);
+        AddDependsMapDependencies(result, asset, oneBasedIndex);
+    }
+
+    private static void AddDependsMapDependencies(List<AssetDependency> result, UAsset asset, int oneBasedIndex)
+    {
+        if (asset.DependsMap is null || oneBasedIndex - 1 >= asset.DependsMap.Count) return;
+        foreach (var rawIndex in asset.DependsMap[oneBasedIndex - 1] ?? [])
+            AddPackageIndex(result, asset, "dependsMap", oneBasedIndex, null, new FPackageIndex(rawIndex));
+    }
+
+    private static void AddPackageDependencies(List<AssetDependency> result, UAsset asset)
+    {
+        foreach (var (import, index) in asset.Imports.Select((value, index) => (value, index + 1)))
+            AddPackageIndex(result, asset, "importHeader", null, $"import[{index}].outerIndex", import.OuterIndex);
+
+        foreach (var package in asset.SoftPackageReferenceList ?? [])
+            result.Add(new AssetDependency("softPackageReference", null, null, null, "softPackage", null, package?.ToString(), null));
+
+        foreach (var dependency in asset.ExtraPackageDependencies ?? [])
+            result.Add(new AssetDependency("extraPackageDependency", null, null, null, "package", null, dependency.Key?.ToString(), null, dependency.Value));
     }
 
     private static void AddPackageIndexes(List<AssetDependency> result, UAsset asset, string category, int sourceExportIndex, IEnumerable<FPackageIndex>? indexes)

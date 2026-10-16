@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Diagnostics;
-using System.Reflection;
 using MCP_UAsset_Toolkit.Source.Models;
 using MCP_UAsset_Toolkit.Source.Services;
 using MCP_UAsset_Toolkit.Source.Tools;
@@ -11,34 +10,38 @@ namespace MCP.UAssetToolkit.Tests;
 
 public class RetocTests
 {
+    private const string SuccessProperty = "success";
+    private const string TestDirectoryPrefix = "retoc-tests-";
+    private const string InputFileContents = "input";
     [Fact]
     public void ArgumentBuilderUsesTypedGlobalOptionsBeforeCommand()
     {
-        var args = RetocService.BuildArguments(new RetocOptions { AesKey = "secret", ContainerHeaderVersionOverride = "Initial", TocVersionOverride = "DirectoryIndex" }, "info", "C:\\input.utoc");
-        Assert.Equal(["--aes-key", "secret", "--override-container-header-version", "Initial", "--override-toc-version", "DirectoryIndex", "info", "C:\\input.utoc"], args);
+        var inputPath = Path.Combine("test-input", "input.utoc");
+        var args = RetocService.BuildArguments(new RetocOptions { AesKey = "secret", ContainerHeaderVersionOverride = "Initial", TocVersionOverride = "DirectoryIndex" }, "info", inputPath);
+        Assert.Equal(["--aes-key", "secret", "--override-container-header-version", "Initial", "--override-toc-version", "DirectoryIndex", "info", inputPath], args);
     }
 
     [Fact]
     public async Task MissingRetocHasDownloadGuidanceWithoutInstallingAnything()
     {
         using var response = JsonDocument.Parse(await RetocTools.RetocStatusAsync(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "retoc.exe"), TestContext.Current.CancellationToken));
-        Assert.False(response.RootElement.GetProperty("success").GetBoolean());
+        Assert.False(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Contains(RetocService.ReleasesUrl, response.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]
     public async Task ConversionRejectsExistingOutputBeforeStartingRetoc()
     {
-        var root = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
             var input = Path.Combine(root, "legacy.pak");
             var output = Path.Combine(root, "out.utoc");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             await File.WriteAllTextAsync(output, "existing", TestContext.Current.CancellationToken);
             using var response = JsonDocument.Parse(await RetocTools.ConvertToZenAsync(input, output, "UE5_4", cancellationToken: TestContext.Current.CancellationToken));
-            Assert.False(response.RootElement.GetProperty("success").GetBoolean());
+            Assert.False(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.Equal("existing", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -47,13 +50,13 @@ public class RetocTests
     [Fact]
     public async Task LegacyConversionRejectsInputAsOutputWithoutChangingIt()
     {
-        var path = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N") + ".pak");
-        await File.WriteAllTextAsync(path, "input", TestContext.Current.CancellationToken);
+        var path = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N") + ".pak");
+        await File.WriteAllTextAsync(path, InputFileContents, TestContext.Current.CancellationToken);
         try
         {
             using var response = JsonDocument.Parse(await RetocTools.ConvertToLegacyAsync(path, path, cancellationToken: TestContext.Current.CancellationToken));
-            Assert.False(response.RootElement.GetProperty("success").GetBoolean());
-            Assert.Equal("input", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
+            Assert.False(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
+            Assert.Equal(InputFileContents, await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
         }
         finally { File.Delete(path); }
     }
@@ -61,14 +64,14 @@ public class RetocTests
     [Fact]
     public async Task NestedOutputPreflightDoesNotCreateItsMissingParent()
     {
-        var root = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N"));
         var input = Path.Combine(root, "legacy-input");
         var missingOutputParent = Path.Combine(input, "new-output");
         Directory.CreateDirectory(input);
         try
         {
             using var response = JsonDocument.Parse(await RetocTools.ConvertToZenAsync(input, Path.Combine(missingOutputParent, "out.utoc"), "UE5_4", cancellationToken: TestContext.Current.CancellationToken));
-            Assert.False(response.RootElement.GetProperty("success").GetBoolean());
+            Assert.False(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
             Assert.False(Directory.Exists(missingOutputParent));
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -77,12 +80,12 @@ public class RetocTests
     [Fact]
     public async Task PreCancelledConversionDoesNotCreateAStageDirectory()
     {
-        var root = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         var input = Path.Combine(root, "input.utoc");
-        await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
         try
         {
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RetocService.ConvertToLegacyAsync(input, Path.Combine(root, "out.pak"), null, cancellation.Token));
@@ -95,7 +98,7 @@ public class RetocTests
     public async Task InspectRejectsUnsupportedAction()
     {
         using var response = JsonDocument.Parse(await RetocTools.InspectIoStoreAsync("missing.utoc", "unpack", cancellationToken: TestContext.Current.CancellationToken));
-        Assert.False(response.RootElement.GetProperty("success").GetBoolean());
+        Assert.False(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Contains("info, list, verify", response.RootElement.GetProperty("error").GetString());
     }
 
@@ -104,7 +107,7 @@ public class RetocTests
     {
         RequireRetocOnPath();
         using var response = JsonDocument.Parse(await RetocTools.RetocStatusAsync(cancellationToken: TestContext.Current.CancellationToken));
-        Assert.True(response.RootElement.GetProperty("success").GetBoolean());
+        Assert.True(response.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Equal(0, response.RootElement.GetProperty("data").GetProperty("exitCode").GetInt32());
         Assert.Contains("retoc", response.RootElement.GetProperty("data").GetProperty("standardOutput").GetString() ?? string.Empty, StringComparison.OrdinalIgnoreCase);
     }
@@ -113,7 +116,7 @@ public class RetocTests
     public async Task InstalledRetocReturnsActionableErrorForInvalidContainer()
     {
         RequireRetocOnPath();
-        var path = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N") + ".utoc");
+        var path = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N") + ".utoc");
         await File.WriteAllTextAsync(path, "not an IoStore container", TestContext.Current.CancellationToken);
         try
         {
@@ -130,7 +133,7 @@ public class RetocTests
     public async Task TimedOutHelperProcessReturnsWithoutWaitingForTheHelperDuration()
     {
         RequireWindows();
-        var root = Path.Combine(Path.GetTempPath(), "retoc-tests-" + Guid.NewGuid().ToString("N"));
+        var root = Path.Combine(Path.GetTempPath(), TestDirectoryPrefix + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
         try
         {
@@ -154,10 +157,10 @@ public class RetocTests
         {
             var process = RunSleepingProcessAsync(30, cancellation.Token);
             await Task.Delay(200, TestContext.Current.CancellationToken);
-            cancellation.Cancel();
+            await cancellation.CancelAsync();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => process);
         }
-        finally { cancellation.Cancel(); }
+        finally { await cancellation.CancelAsync(); }
     }
 
     private static void RequireRetocOnPath()
@@ -176,8 +179,6 @@ public class RetocTests
     private static Task<RetocCommandResult> RunSleepingProcessAsync(int timeoutSeconds, CancellationToken cancellationToken)
     {
         var commandPath = Path.Combine(Environment.SystemDirectory, "cmd.exe");
-        var runner = typeof(RetocService).GetMethod("RunAsync", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("Retoc process runner was not found.");
-        return (Task<RetocCommandResult>)runner.Invoke(null, [commandPath, new[] { "/d", "/c", "ping 127.0.0.1 -n 31 > nul" }, null, timeoutSeconds, cancellationToken])!;
+        return RetocService.RunAsync(commandPath, ["/d", "/c", "ping 127.0.0.1 -n 31 > nul"], null, timeoutSeconds, cancellationToken);
     }
 }

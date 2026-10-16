@@ -9,19 +9,28 @@ namespace MCP.UAssetToolkit.Tests;
 
 public class RetocWorkflowTests
 {
+    private const string InitialVersion = "Initial";
+    private const string DirectoryIndexVersion = "DirectoryIndex";
+    private const string InputFileName = "input.utoc";
+    private const string InputFileContents = "input";
+    private const string ChunkFileName = "chunk.bin";
+    private const string UcasExtension = ".ucas";
+    private const string SampleChunkId = "000000000000000000000005";
+    private const string SuperSecretKey = "super-secret";
+    private static readonly TimeSpan RecoveryPathRegexTimeout = TimeSpan.FromSeconds(1);
     [Fact]
     public void WorkflowArgumentsKeepGlobalOptionsBeforeTheExactRetocCommand()
     {
         var arguments = RetocService.BuildArguments(
-            new RetocOptions { AesKey = "secret", ContainerHeaderVersionOverride = "Initial", TocVersionOverride = "DirectoryIndex" },
+            new RetocOptions { AesKey = "secret", ContainerHeaderVersionOverride = InitialVersion, TocVersionOverride = DirectoryIndexVersion },
             "gen-script-objects",
             "--version", "UE5_4", "C:\\input.jmap", "C:\\output.utoc");
 
         Assert.Equal(
         [
             "--aes-key", "secret",
-            "--override-container-header-version", "Initial",
-            "--override-toc-version", "DirectoryIndex",
+            "--override-container-header-version", InitialVersion,
+            "--override-toc-version", DirectoryIndexVersion,
             "gen-script-objects", "--version", "UE5_4", "C:\\input.jmap", "C:\\output.utoc"
         ], arguments);
     }
@@ -32,9 +41,9 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
+            var input = Path.Combine(root, InputFileName);
             var output = Path.Combine(root, "unpacked");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
 
             await Assert.ThrowsAsync<ArgumentException>(() => RetocWorkflowService.UnpackAsync(input, output, new RetocOptions { NoAssets = true }, TestContext.Current.CancellationToken));
 
@@ -50,9 +59,9 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
-            var output = Path.Combine(root, "chunk.bin");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            var input = Path.Combine(root, InputFileName);
+            var output = Path.Combine(root, ChunkFileName);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
 
             await Assert.ThrowsAsync<ArgumentException>(() => RetocWorkflowService.GetChunkAsync(input, "not-a-chunk-id", output, null, TestContext.Current.CancellationToken));
 
@@ -70,7 +79,7 @@ public class RetocWorkflowTests
         {
             var input = Path.Combine(root, "raw");
             var output = Path.Combine(root, "packed.utoc");
-            var sidecar = Path.ChangeExtension(output, ".ucas");
+            var sidecar = Path.ChangeExtension(output, UcasExtension);
             Directory.CreateDirectory(input);
             await File.WriteAllTextAsync(sidecar, "existing", TestContext.Current.CancellationToken);
 
@@ -89,8 +98,8 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            var input = Path.Combine(root, InputFileName);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var missingRetoc = Path.Combine(root, "missing-retoc.exe");
 
             using var response = JsonDocument.Parse(await RetocWorkflowTools.ExtractIoStoreManifestAsync(input, new RetocOptions { RetocPath = missingRetoc }, TestContext.Current.CancellationToken));
@@ -111,10 +120,10 @@ public class RetocWorkflowTests
         {
             var argumentsPath = Path.Combine(root, "arguments.txt");
             var retocPath = CreateFakeRetoc(root, "unpack", argumentsPath);
-            var input = Path.Combine(root, "input.utoc");
+            var input = Path.Combine(root, InputFileName);
             var output = Path.Combine(root, "out");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
-            var options = new RetocOptions { RetocPath = retocPath, AesKey = "test-secret", ContainerHeaderVersionOverride = "Initial", TocVersionOverride = "DirectoryIndex" };
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
+            var options = new RetocOptions { RetocPath = retocPath, AesKey = "test-secret", ContainerHeaderVersionOverride = InitialVersion, TocVersionOverride = DirectoryIndexVersion };
 
             var result = await RetocWorkflowService.UnpackAsync(input, output, options, TestContext.Current.CancellationToken);
 
@@ -124,9 +133,9 @@ public class RetocWorkflowTests
             Assert.Equal("--aes-key", arguments[0]);
             Assert.Equal("test-secret", arguments[1]);
             Assert.Equal("--override-container-header-version", arguments[2]);
-            Assert.Equal("Initial", arguments[3]);
+            Assert.Equal(InitialVersion, arguments[3]);
             Assert.Equal("--override-toc-version", arguments[4]);
-            Assert.Equal("DirectoryIndex", arguments[5]);
+            Assert.Equal(DirectoryIndexVersion, arguments[5]);
             Assert.Equal("unpack", arguments[6]);
             Assert.Equal(input, arguments[7]);
             Assert.StartsWith(Path.Combine(root, ".out.retoc-"), arguments[8], StringComparison.OrdinalIgnoreCase);
@@ -150,12 +159,12 @@ public class RetocWorkflowTests
             var package = Path.Combine(root, "container.utoc");
             var packed = await RetocWorkflowService.PackRawAsync(input, package, new RetocOptions { RetocPath = packRetoc }, TestContext.Current.CancellationToken);
             Assert.Equal("utoc", (await File.ReadAllTextAsync(package, TestContext.Current.CancellationToken)).Trim());
-            Assert.Equal("ucas", (await File.ReadAllTextAsync(Path.ChangeExtension(package, ".ucas"), TestContext.Current.CancellationToken)).Trim());
-            Assert.Equal([package, Path.ChangeExtension(package, ".ucas")], packed.OutputPaths);
+            Assert.Equal("ucas", (await File.ReadAllTextAsync(Path.ChangeExtension(package, UcasExtension), TestContext.Current.CancellationToken)).Trim());
+            Assert.Equal([package, Path.ChangeExtension(package, UcasExtension)], packed.OutputPaths);
 
             var getRetoc = CreateFakeRetoc(root, "get", null);
-            var chunk = Path.Combine(root, "chunk.bin");
-            await RetocWorkflowService.GetChunkAsync(package, "000000000000000000000005", chunk, new RetocOptions { RetocPath = getRetoc }, TestContext.Current.CancellationToken);
+            var chunk = Path.Combine(root, ChunkFileName);
+            await RetocWorkflowService.GetChunkAsync(package, SampleChunkId, chunk, new RetocOptions { RetocPath = getRetoc }, TestContext.Current.CancellationToken);
             Assert.Equal("raw-chunk", await File.ReadAllTextAsync(chunk, TestContext.Current.CancellationToken));
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -171,7 +180,7 @@ public class RetocWorkflowTests
             var input = Path.Combine(root, "raw");
             Directory.CreateDirectory(input);
             var output = Path.Combine(root, "packed.utoc");
-            var sidecar = Path.ChangeExtension(output, ".ucas");
+            var sidecar = Path.ChangeExtension(output, UcasExtension);
             // Capture creates the conflicting final sidecar after service preflight, inside the subprocess.
             var retocPath = CreateFakeRetoc(root, "pack", sidecar);
             await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.PackRawAsync(input, output, new RetocOptions { RetocPath = retocPath }, TestContext.Current.CancellationToken));
@@ -198,9 +207,9 @@ public class RetocWorkflowTests
 
             var result = await RetocWorkflowService.GenerateScriptObjectsAsync(input, output, "UE5_4", new RetocOptions { RetocPath = retocPath }, TestContext.Current.CancellationToken);
 
-            Assert.Equal([output, Path.ChangeExtension(output, ".ucas")], result.OutputPaths);
+            Assert.Equal([output, Path.ChangeExtension(output, UcasExtension)], result.OutputPaths);
             Assert.Equal("utoc", (await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken)).Trim());
-            Assert.Equal("ucas", (await File.ReadAllTextAsync(Path.ChangeExtension(output, ".ucas"), TestContext.Current.CancellationToken)).Trim());
+            Assert.Equal("ucas", (await File.ReadAllTextAsync(Path.ChangeExtension(output, UcasExtension), TestContext.Current.CancellationToken)).Trim());
         }
         finally { Directory.Delete(root, recursive: true); }
     }
@@ -212,8 +221,8 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            var input = Path.Combine(root, InputFileName);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var retocPath = CreateFakeRetoc(root, "manifest", null);
             var existingManifest = Path.Combine(root, "pakstore.json");
             await File.WriteAllTextAsync(existingManifest, "existing-manifest", TestContext.Current.CancellationToken);
@@ -235,12 +244,12 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
-            var output = Path.Combine(root, "chunk.bin");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            var input = Path.Combine(root, InputFileName);
+            var output = Path.Combine(root, ChunkFileName);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var retocPath = CreateFakeRetoc(root, "none", null);
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.GetChunkAsync(input, "000000000000000000000005", output, new RetocOptions { RetocPath = retocPath }, TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.GetChunkAsync(input, SampleChunkId, output, new RetocOptions { RetocPath = retocPath }, TestContext.Current.CancellationToken));
 
             Assert.False(File.Exists(output));
             Assert.Single(Directory.EnumerateDirectories(root, ".chunk.retoc-*"));
@@ -256,13 +265,13 @@ public class RetocWorkflowTests
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         try
         {
-            var input = Path.Combine(root, "input.utoc");
+            var input = Path.Combine(root, InputFileName);
             var output = Path.Combine(root, "out");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var retocPath = CreateFakeRetoc(root, "sleep-after-unpack", null);
             var running = RetocWorkflowService.UnpackAsync(input, output, new RetocOptions { RetocPath = retocPath }, cancellation.Token);
             await Task.Delay(200, TestContext.Current.CancellationToken);
-            cancellation.Cancel();
+            await cancellation.CancelAsync();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
             Assert.False(Directory.Exists(output));
@@ -278,14 +287,14 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
+            var input = Path.Combine(root, InputFileName);
             var output = Path.Combine(root, "out");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var retocPath = CreateFakeRetoc(root, "sleep-error", null);
 
-            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.UnpackAsync(input, output, new RetocOptions { RetocPath = retocPath, AesKey = "super-secret", TimeoutSeconds = 1 }, TestContext.Current.CancellationToken));
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.UnpackAsync(input, output, new RetocOptions { RetocPath = retocPath, AesKey = SuperSecretKey, TimeoutSeconds = 1 }, TestContext.Current.CancellationToken));
 
-            Assert.DoesNotContain("super-secret", error.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain(SuperSecretKey, error.ToString(), StringComparison.Ordinal);
             Assert.Single(Directory.EnumerateDirectories(root, ".out.retoc-*"));
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -298,15 +307,15 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            var input = Path.Combine(root, "input.utoc");
-            var output = Path.Combine(root, "chunk.bin");
-            await File.WriteAllTextAsync(input, "input", TestContext.Current.CancellationToken);
+            var input = Path.Combine(root, InputFileName);
+            var output = Path.Combine(root, ChunkFileName);
+            await File.WriteAllTextAsync(input, InputFileContents, TestContext.Current.CancellationToken);
             var retocPath = CreateFakeRetoc(root, "get-secret", null);
 
-            var result = await RetocWorkflowService.GetChunkAsync(input, "000000000000000000000005", output, new RetocOptions { RetocPath = retocPath, AesKey = "super-secret" }, TestContext.Current.CancellationToken);
+            var result = await RetocWorkflowService.GetChunkAsync(input, SampleChunkId, output, new RetocOptions { RetocPath = retocPath, AesKey = SuperSecretKey }, TestContext.Current.CancellationToken);
 
-            Assert.DoesNotContain("super-secret", result.Command.StandardOutput, StringComparison.Ordinal);
-            Assert.DoesNotContain("super-secret", result.Command.StandardError, StringComparison.Ordinal);
+            Assert.DoesNotContain(SuperSecretKey, result.Command.StandardOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain(SuperSecretKey, result.Command.StandardError, StringComparison.Ordinal);
             Assert.Equal("raw-chunk", await File.ReadAllTextAsync(output, TestContext.Current.CancellationToken));
         }
         finally { Directory.Delete(root, recursive: true); }
@@ -319,7 +328,7 @@ public class RetocWorkflowTests
         var root = CreateRoot();
         try
         {
-            const string chunkId = "000000000000000000000005";
+            const string chunkId = SampleChunkId;
             var bytes = new byte[] { 0, 1, 2, 3, 255 };
             var raw = Path.Combine(root, "raw");
             var chunks = Path.Combine(raw, "chunks");
@@ -329,13 +338,13 @@ public class RetocWorkflowTests
             var options = new RetocOptions { RetocPath = retocPath, TimeoutSeconds = 15 };
             var utoc = Path.Combine(root, "roundtrip.utoc");
             var unpacked = Path.Combine(root, "unpacked");
-            var extracted = Path.Combine(root, "chunk.bin");
+            var extracted = Path.Combine(root, ChunkFileName);
 
             await RetocWorkflowService.PackRawAsync(raw, utoc, options, TestContext.Current.CancellationToken);
             await RetocWorkflowService.UnpackRawAsync(utoc, unpacked, options, TestContext.Current.CancellationToken);
             await RetocWorkflowService.GetChunkAsync(utoc, chunkId, extracted, options, TestContext.Current.CancellationToken);
             var manifestError = await Assert.ThrowsAsync<InvalidOperationException>(() => RetocWorkflowService.ExtractManifestAsync(utoc, options, TestContext.Current.CancellationToken));
-            var recovery = System.Text.RegularExpressions.Regex.Match(manifestError.Message, "Recovery files, if any, remain in '([^']+)'");
+            var recovery = System.Text.RegularExpressions.Regex.Match(manifestError.Message, "Recovery files, if any, remain in '([^']+)'", System.Text.RegularExpressions.RegexOptions.None, RecoveryPathRegexTimeout);
             Assert.True(recovery.Success);
             var manifestStage = recovery.Groups[1].Value;
             Assert.StartsWith(Path.Combine(Path.GetTempPath(), ".manifest.retoc-"), manifestStage, StringComparison.OrdinalIgnoreCase);
@@ -368,9 +377,14 @@ public class RetocWorkflowTests
 
     private static string RequireInstalledRetoc()
     {
-        const string retocPath = @"C:\Programs\retoc\retoc.exe";
-        if (!File.Exists(retocPath)) throw SkipException.ForSkip("retoc is optional and was not found at C:\\Programs\\retoc\\retoc.exe.");
-        return retocPath;
+        var configuredPath = Environment.GetEnvironmentVariable("RETOC_PATH");
+        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath)) return configuredPath;
+
+        var executableName = OperatingSystem.IsWindows() ? "retoc.exe" : "retoc";
+        var pathEntries = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var discoveredPath = pathEntries.Select(entry => Path.Combine(entry, executableName)).FirstOrDefault(File.Exists);
+        return discoveredPath ?? throw SkipException.ForSkip("retoc is optional and was not found through RETOC_PATH or PATH.");
     }
 
     private static string CreateFakeRetoc(string root, string mode, string? argumentsPath)

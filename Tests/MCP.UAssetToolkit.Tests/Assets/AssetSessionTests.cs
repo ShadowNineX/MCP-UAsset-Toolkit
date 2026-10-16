@@ -14,6 +14,7 @@ public class AssetSessionCollection;
 [Collection("Asset sessions")]
 public sealed class AssetSessionTests : IDisposable
 {
+    private const string SuccessProperty = "success";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UAssetToolkitTests", Guid.NewGuid().ToString("N"));
     private string AssetPath => Path.Combine(directory, "TestSoundClass.uasset");
 
@@ -141,9 +142,9 @@ public sealed class AssetSessionTests : IDisposable
         using var reload = JsonDocument.Parse(await SessionTools.ReloadSessionAsync(AssetPath));
         using var clear = JsonDocument.Parse(await SessionTools.ClearAllSessionsAsync());
 
-        Assert.False(close.RootElement.GetProperty("success").GetBoolean());
-        Assert.False(reload.RootElement.GetProperty("success").GetBoolean());
-        Assert.False(clear.RootElement.GetProperty("success").GetBoolean());
+        Assert.False(close.RootElement.GetProperty(SuccessProperty).GetBoolean());
+        Assert.False(reload.RootElement.GetProperty(SuccessProperty).GetBoolean());
+        Assert.False(clear.RootElement.GetProperty(SuccessProperty).GetBoolean());
         Assert.Same(session, AssetSessionService.GetSession(AssetPath));
     }
 

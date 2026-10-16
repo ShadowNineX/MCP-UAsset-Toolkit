@@ -14,6 +14,9 @@ namespace MCP.UAssetToolkit.Tests;
 [Collection("Asset sessions")]
 public sealed class AssetBatchTests : IDisposable
 {
+    private const string FolderNamePointer = "/FolderName";
+    private const string ReplaceOperation = "replace";
+    private const string RemoveOperation = "remove";
     private readonly string directory = Path.Combine(Path.GetTempPath(), "UAssetToolkitBatchTests", Guid.NewGuid().ToString("N"));
     private string AssetPath => Path.Combine(directory, "Test.uasset");
 
@@ -43,10 +46,10 @@ public sealed class AssetBatchTests : IDisposable
         original.ArrayStructTypeOverride["BatchArray"] = new FString("Guid");
         var result = AssetDocumentService.PatchBatch(AssetPath,
         [
-            Edit("/FolderName", "test", JsonSerializer.Serialize(original.FolderName.Value)),
-            Edit("/FolderName", "replace", "\"First\""),
-            Edit("/FolderName", "replace", "\"FinalBatchFolder\""),
-            Edit("/PackageSource", "replace", "123")
+            Edit(FolderNamePointer, "test", JsonSerializer.Serialize(original.FolderName.Value)),
+            Edit(FolderNamePointer, ReplaceOperation, "\"First\""),
+            Edit(FolderNamePointer, ReplaceOperation, "\"FinalBatchFolder\""),
+            Edit("/PackageSource", ReplaceOperation, "123")
         ]);
 
         Assert.Equal(4, result.OperationCount);
@@ -71,12 +74,12 @@ public sealed class AssetBatchTests : IDisposable
         var session = LoadFixture();
         session.IsDirty = initiallyDirty;
         var original = session.Asset;
-        var preview = AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "replace", "\"PreviewOnly\"")], preview: true);
+        var preview = AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, ReplaceOperation, "\"PreviewOnly\"")], preview: true);
         Assert.True(preview.Changed);
         Assert.True(preview.Preview);
         Assert.Same(original, session.Asset);
         Assert.Equal(initiallyDirty, session.IsDirty);
-        var testOnly = AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "test", JsonSerializer.Serialize(original.FolderName.Value))]);
+        var testOnly = AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, "test", JsonSerializer.Serialize(original.FolderName.Value))]);
         Assert.False(testOnly.Changed);
         Assert.Same(original, session.Asset);
         Assert.Equal(initiallyDirty, session.IsDirty);
@@ -91,11 +94,11 @@ public sealed class AssetBatchTests : IDisposable
         session.IsDirty = initiallyDirty;
         var original = session.Asset;
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.PatchBatch(AssetPath,
-            [Edit("/FolderName", "replace", "\"DiscardThis\""), Edit("/FolderName", "test", "\"Wrong\"")]));
+            [Edit(FolderNamePointer, ReplaceOperation, "\"DiscardThis\""), Edit(FolderNamePointer, "test", "\"Wrong\"")]));
         Assert.Same(original, session.Asset);
         Assert.Equal(initiallyDirty, session.IsDirty);
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.PatchBatch(AssetPath,
-            [Edit("/FolderName", "replace", "\"DiscardThis\""), Edit("/Missing", "remove")]));
+            [Edit(FolderNamePointer, ReplaceOperation, "\"DiscardThis\""), Edit("/Missing", RemoveOperation)]));
         Assert.Same(original, session.Asset);
         Assert.Equal(initiallyDirty, session.IsDirty);
     }
@@ -106,10 +109,10 @@ public sealed class AssetBatchTests : IDisposable
         var session = LoadFixture();
         AssetDocumentService.PatchBatch(AssetPath,
         [
-            Edit("/ChunkIDs", "replace", "[1,2,3]"),
+            Edit("/ChunkIDs", ReplaceOperation, "[1,2,3]"),
             Edit("/ChunkIDs/-", "copy", from: "/ChunkIDs/0"),
             Edit("/ChunkIDs/0", "move", from: "/ChunkIDs/1"),
-            Edit("/ChunkIDs/2", "remove"),
+            Edit("/ChunkIDs/2", RemoveOperation),
             Edit("/ChunkIDs", "test", "[2,1,1]")
         ]);
         Assert.Equal([2, 1, 1], session.Asset.ChunkIDs);
@@ -125,7 +128,7 @@ public sealed class AssetBatchTests : IDisposable
         var oldProperties = Assert.IsAssignableFrom<NormalExport>(session.Asset.Exports[0]).Data.Count;
         AssetDocumentService.PatchBatch(AssetPath,
         [
-            Edit("/FolderName", "replace", "\"LongerBatchFolderForOffsetRecalculation\""),
+            Edit(FolderNamePointer, ReplaceOperation, "\"LongerBatchFolderForOffsetRecalculation\""),
             Edit("/Exports/0/Data/-", "add", "{\"$type\":\"UAssetAPI.PropertyTypes.Objects.BoolPropertyData, UAssetAPI\",\"Name\":\"BatchNovelName_17\",\"Value\":true}")
         ]);
         Assert.True(JsonNode.DeepEquals(importsBefore, AssetDocumentService.Read(AssetPath, "/Imports").Value));
@@ -148,7 +151,7 @@ public sealed class AssetBatchTests : IDisposable
         var session = LoadFixture();
         var original = session.Asset;
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.PatchBatch(AssetPath,
-            [Edit("/FolderName", "replace", "\"DiscardThis\""), Edit(pointer, operation, value)]));
+            [Edit(FolderNamePointer, ReplaceOperation, "\"DiscardThis\""), Edit(pointer, operation, value)]));
         Assert.Same(original, session.Asset);
         Assert.False(session.IsDirty);
     }
@@ -160,15 +163,15 @@ public sealed class AssetBatchTests : IDisposable
         var original = session.Asset;
         Assert.Throws<ArgumentNullException>(() => AssetDocumentService.PatchBatch(AssetPath, null!));
         Assert.Throws<ArgumentOutOfRangeException>(() => AssetDocumentService.PatchBatch(AssetPath, []));
-        Assert.Throws<ArgumentOutOfRangeException>(() => AssetDocumentService.PatchBatch(AssetPath, Enumerable.Repeat(Edit("/FolderName", "replace", "null"), 101).ToArray()));
+        Assert.Throws<ArgumentOutOfRangeException>(() => AssetDocumentService.PatchBatch(AssetPath, Enumerable.Repeat(Edit(FolderNamePointer, ReplaceOperation, "null"), 101).ToArray()));
         Assert.Throws<ArgumentNullException>(() => AssetDocumentService.PatchBatch(AssetPath, [null!]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "unknown")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "replace")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "remove", "null")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "copy")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "replace", "null", "/ChunkIDs")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "replace", "not-json")]));
-        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/FolderName", "replace", new string(' ', 1_000_001))]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, "unknown")]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, ReplaceOperation)]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, RemoveOperation, "null")]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, "copy")]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, ReplaceOperation, "null", "/ChunkIDs")]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, ReplaceOperation, "not-json")]));
+        Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit(FolderNamePointer, ReplaceOperation, new string(' ', 1_000_001))]));
         Assert.Throws<ArgumentException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/Exports/~2", "remove")]));
         Assert.Throws<InvalidOperationException>(() => AssetDocumentService.PatchBatch(AssetPath, [Edit("/Exports/0/Data", "move", from: "/Exports")]));
         Assert.Same(original, session.Asset);
@@ -184,7 +187,7 @@ public sealed class AssetBatchTests : IDisposable
         var missingPath = Path.Combine(directory, "Missing.uasset");
         var diskBefore = File.ReadAllBytes(AssetPath);
         var secondDiskBefore = File.ReadAllBytes(secondPath);
-        var edits = new[] { Edit("/FolderName", "replace", "\"BulkEdited\"") };
+        var edits = new[] { Edit(FolderNamePointer, ReplaceOperation, "\"BulkEdited\"") };
         var preview = AssetBatchService.Patch([AssetPath, missingPath, secondPath], edits);
         Assert.Equal([true, false, true], preview.Select(item => item.Success));
         Assert.False(first.IsDirty);

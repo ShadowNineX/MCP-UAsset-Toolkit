@@ -8,6 +8,7 @@ namespace MCP.UAssetToolkit.Tests;
 
 public class McpSchemaTests
 {
+    private static readonly TimeSpan CatalogRegexTimeout = TimeSpan.FromSeconds(1);
     [Fact]
     public void CatalogIncludesEveryDiscoveredToolExactlyOnce()
     {
@@ -18,7 +19,7 @@ public class McpSchemaTests
             .Select(method => McpServerTool.Create(method, target: null).ProtocolTool.Name)
             .Order(StringComparer.Ordinal).ToArray();
         var catalog = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "TOOLS.md"));
-        var documented = Regex.Matches(catalog, @"^\| `(?<name>[a-z][a-z0-9_]*)` \|", RegexOptions.Multiline)
+        var documented = Regex.Matches(catalog, @"^\| `(?<name>[a-z][a-z0-9_]*)` \|", RegexOptions.Multiline, CatalogRegexTimeout)
             .Select(match => match.Groups["name"].Value).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(documented.Length, documented.Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(discovered, documented);

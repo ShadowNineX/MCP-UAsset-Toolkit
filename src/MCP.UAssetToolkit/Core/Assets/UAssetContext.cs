@@ -9,6 +9,7 @@ public static class UAssetContext
 {
     // Empty header sections can retain nonzero offsets. UAssetAPI does not include
     // these internal values in JSON or always recalculate them when writing.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Maintainability", "S3011", Justification = "The pinned UAssetAPI has no public accessor for header context omitted by its JSON format. Only internal numeric offset/count fields on the fixed UAsset type are copied between UAsset instances; caller input cannot select members or types.")]
     private static readonly FieldInfo[] HeaderFields = typeof(UAsset)
         .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
         .Where(field => field.IsAssembly && (field.FieldType == typeof(int) || field.FieldType == typeof(long))
